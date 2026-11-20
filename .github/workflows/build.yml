@@ -47,7 +47,7 @@ jobs:
       - name: Ad-hoc sign with entitlements
         run: |
           codesign --force --sign - \
-            --entitlements Discord/Discord.entitlements \
+            --entitlements Discord/Discord/Discord.entitlements \
             build/Payload/Discord.app
           codesign -d --entitlements :- build/Payload/Discord.app
 
