@@ -57,10 +57,69 @@ one restores the first before the new bytes land.
 
 ## Build
 
-Requirements: macOS with Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen),
-and an enterprise certificate. SideStore / AltStore / 3uTools / LiveContainer
-are not supported install routes — the app needs the entitlements those routes
-do not provide.
+Requirements: Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen),
+or no Mac at all: `.github/workflows/build.yml` builds an unsigned IPA on a
+`macos-15` runner and ad-hoc signs it with `Discord.entitlements`, so the App
+Group survives packaging.
+
+Two signing routes, pick one:
+
+- **Free (iOS 26.0–27.3):** normal bundle id + App Group, installed with
+  SideStore / AltStore / Impactor. Uses `worse_query`, no certificate to buy.
+- **Paid / enterprise (iOS ≤26):** bundle id `com.apple.mobile.MobileHouseArrest`
+  kept intact, uses the MCM / House Arrest identity.
+
+3uTools and LiveContainer guests are not supported: they drop the entitlements
+both routes need.
+
+Install route matters because the engine addresses MobileContainerManager with
+the identity `com.apple.mobile.MobileHouseArrest`. That identifier must survive
+signing:
+
+| Route | Identity kept | Notes |
+|---|---|---|
+| Xcode + enterprise/in-house cert (wildcard profile) | yes | the supported route |
+| eSign / Feather / GBox with a shared enterprise cert | usually | check the profile is a wildcard (`*`) app id |
+| eSign / SideStore / AltStore / Sideloadly with a personal Apple ID | no | the portal cannot register a `com.apple.*` app id, so the signer rewrites it and MCM returns `signed as … , MCM identity … required` |
+| TrollStore | yes | only iOS 14.0–16.6.1, 16.7 RC, 17.0; not 18/26/27 |
+
+### Free route: App Group (`worse_query`), iOS 26.0–27.3
+
+A personal Apple ID cannot keep the `com.apple.mobile.MobileHouseArrest`
+identity, but it does not have to. `worse_query` (forcequitOS, November 2026)
+is a userland MobileContainerManager escape with no kernel component: any app
+holding an App Group entitlement replaces its group's `Library/Caches` with a
+symlink to a foreign container and asks `containermanagerd` for that part. The
+daemon resolves the symlink and mints a `com.apple.app-sandbox.read-write`
+extension for the target without checking that it is still inside the
+container.
+
+That is the third backend, after MCM/kernel and pairing:
+
+1. Change `PRODUCT_BUNDLE_IDENTIFIER` to a normal id (anything not
+   `com.apple.*`), e.g. `com.zada.discord`. `Info.plist` reads the same build
+   setting, so one edit covers both identifiers.
+2. Keep `Discord/Discord.entitlements`; it declares
+   `group.com.zada.discord`. AltStore, SideStore and Impactor create the App
+   Group under your free Apple ID automatically, Sideloadly cannot (a wildcard
+   App ID carries no group).
+3. Install with the free signing route and open a patch. The engine scans the
+   data containers by inode, grants itself a token for each candidate, and
+   stops at the one that reports `com.dts.freefireth` through its container
+   metadata, its `com.apple.containermanager.identifier` xattr, or the game's
+   own `Library/Preferences/<bundle id>.plist`. The match is cached in
+   `UserDefaults`, so only the first scan is slow.
+
+Limits: it reaches data containers only — `/var/containers/Bundle/Application`
+stays out of reach, so a patch must live under `Documents/` rather than inside
+the `.app`. The group swap is restored after every probe, and an interrupted
+swap is recovered on the next launch. Verified by its author on iOS 26.0–26.7.2
+and 27.0–27.2, still working on 27.2.1 and 27.3 beta 1; Apple has no advisory
+for it. This route does **not** grant kernel read/write or root.
+
+When the container lookup fails the patch error now ends with
+`Container check: <MCM detail> [app id <bundle id>]`, which names the exact
+identity the build was installed with.
 
 ```bash
 cd Discord
@@ -69,10 +128,11 @@ open Discord.xcodeproj
 ```
 
 Set your signing team, choose a physical arm64 device, and build. The
-`AirliftFFI` xcframework is linked statically; the app bundle identifier is
-`com.apple.mobile.MobileHouseArrest` to keep the House Arrest container
-semantics the engine relies on. Change it only if your certificate cannot sign
-that identifier, and keep the same value in `project.yml` and `Info.plist`.
+`AirliftFFI` xcframework is linked statically. `PRODUCT_BUNDLE_IDENTIFIER` is
+`com.zada.discord` for the free App Group route; `Info.plist` reads the same
+build setting, so there is one place to change. For the paid route set it back
+to `com.apple.mobile.MobileHouseArrest`, which is what the MCM identity check
+looks for.
 
 The simulator builds for UI work. The kernel route is disabled there; the
 `--simulate-access` launch argument makes `KernelExploit.hasSandboxAccess()`

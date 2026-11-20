@@ -27,11 +27,14 @@ targets:
       base:
         INFOPLIST_FILE: Discord/Info.plist
         PRODUCT_NAME: Discord
-        PRODUCT_BUNDLE_IDENTIFIER: com.apple.mobile.MobileHouseArrest
+        # Free route: a normal id signable by a personal Apple ID. The App Group
+        # route does not need the MobileHouseArrest identity; set this back to
+        # com.apple.mobile.MobileHouseArrest only for the paid/enterprise build.
+        PRODUCT_BUNDLE_IDENTIFIER: com.zada.discord
         SWIFT_OBJC_BRIDGING_HEADER: Discord/Discord-Bridging-Header.h
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_ENTITLEMENTS: ""
+        CODE_SIGN_ENTITLEMENTS: Discord/Discord.entitlements
         HEADER_SEARCH_PATHS:
           - "$(SRCROOT)/Discord"
           - "$(SRCROOT)/Discord/engine"

@@ -36,10 +36,23 @@ jobs:
             -archivePath ../build/Discord.xcarchive \
             archive
 
-      - name: Package IPA
+      - name: Assemble Payload
         run: |
           mkdir -p build/Payload
           cp -R build/Discord.xcarchive/Products/Applications/Discord.app build/Payload/
+
+      # The engine's free container route needs the App Group entitlement, and
+      # an ad-hoc signature is the only way to ship it inside an unsigned IPA.
+      # SideStore / AltStore read it and request the group for the free profile.
+      - name: Ad-hoc sign with entitlements
+        run: |
+          codesign --force --sign - \
+            --entitlements Discord/Discord.entitlements \
+            build/Payload/Discord.app
+          codesign -d --entitlements :- build/Payload/Discord.app
+
+      - name: Package IPA
+        run: |
           cd build
           zip -r Discord.ipa Payload
           rm -rf Payload

@@ -29,6 +29,7 @@ enum PatchRuntime {
             throw PatchServiceError.noAccess(
                 "MCM did not resolve \(game.rawValue) and no pairing file is installed. "
                 + "Import a pairing file, or start pairing and allow Developer Mode on this iPhone."
+                + ContainerStore.diagnosticSuffix
             )
         }
 
@@ -53,6 +54,7 @@ enum PatchRuntime {
                     game: game,
                     pairingPath: pairingPath
                 )
+                + ContainerStore.diagnosticSuffix
             )
         }
 
