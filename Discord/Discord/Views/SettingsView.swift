@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var pairing: PairingController
     @EnvironmentObject private var patches: PatchController
+    @EnvironmentObject private var remote: RemotePatches
     @Environment(\.dismiss) private var dismiss
     @Environment(\.t) private var t
 
@@ -22,6 +23,7 @@ struct SettingsView: View {
                     deviceCard
                     exploitCard
                     pairingCard
+                    remoteCard
                     verifiedCard
                     socialCard
                 }
@@ -47,6 +49,7 @@ struct SettingsView: View {
                 do {
                     let path = try pairing.importPairingFile(from: url)
                     log("pairing: imported OK -> \(path)", level: .success)
+                    state.refreshPatches()
                 } catch {
                     log("pairing: import failed: \(error)", level: .error)
                     importError = error.localizedDescription
@@ -297,6 +300,58 @@ struct SettingsView: View {
                             .background(Theme.red.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                }
+            }
+            .appCard(padding: 14)
+        }
+    }
+
+    // MARK: - Remote library
+
+    /// Patch payloads live on the user's own host; the build itself ships none.
+    private var remoteCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: t("settings.remote.title"))
+
+            VStack(alignment: .leading, spacing: 10) {
+                TextField(t("settings.remote.url"), text: $remote.libraryURL)
+                    .font(.system(size: 12, design: .monospaced))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.URL)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .background(Theme.background, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(Theme.border, lineWidth: 0.5)
+                    )
+
+                Text(t("settings.remote.hint"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    Task {
+                        await remote.sync()
+                        state.refreshPatches()
+                    }
+                } label: {
+                    Text(remote.isSyncing ? t("remote.syncing") : t("remote.sync"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(remote.isSyncing ? Theme.textSecondary : Theme.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Theme.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(remote.isSyncing)
+
+                if let report = remote.lastReport {
+                    Text(report)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
                 }
             }
             .appCard(padding: 14)

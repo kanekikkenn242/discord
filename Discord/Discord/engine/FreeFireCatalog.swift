@@ -31,6 +31,8 @@ enum PatchCategory: String, CaseIterable, Identifiable {
     case aimbot
     case hologram
     case skin
+    case texture
+    case fps
 
     var id: String { rawValue }
 
@@ -39,8 +41,13 @@ enum PatchCategory: String, CaseIterable, Identifiable {
         case .aimbot: return "game.category.aimbot"
         case .hologram: return "game.category.hologram"
         case .skin: return "game.category.skin"
+        case .texture: return "game.category.texture"
+        case .fps: return "game.category.fps"
         }
     }
+
+    /// Only the aimbot family is split into the cache/avatar tabs.
+    var hasTabs: Bool { self == .aimbot }
 }
 
 enum AimbotTab: String, CaseIterable, Identifiable {
@@ -60,6 +67,8 @@ enum AimbotTab: String, CaseIterable, Identifiable {
 enum PatchSlot: String {
     case avatar
     case cache
+    case texture
+    case fps
 }
 
 struct PatchProduct: Identifiable, Equatable {
@@ -67,7 +76,9 @@ struct PatchProduct: Identifiable, Equatable {
     let titleKey: String
     let subtitleKey: String
     let category: PatchCategory
-    let tab: AimbotTab
+    /// Unused outside `.aimbot`; optional so texture/fps rows are not forced
+    /// into an Aimbot Cache / Aimbot Avatar segment they do not belong to.
+    let tab: AimbotTab?
     let slot: PatchSlot
     let packageNames: [String]
     let badge: String?
@@ -145,6 +156,76 @@ enum FreeFireCatalog {
             packageNames: ["aimtorso_cache"],
             badge: "SAFE",
             noteKey: nil
+        ),
+
+        // TEXTURAS — one occupied texture slot, same restore-ledger rules.
+        PatchProduct(
+            id: "texture_sielzada",
+            titleKey: "product.texSielzada",
+            subtitleKey: "product.texture.subtitle",
+            category: .texture,
+            tab: nil,
+            slot: .texture,
+            packageNames: ["texture_sielzada"],
+            badge: "TEX",
+            noteKey: "product.texture.note"
+        ),
+        PatchProduct(
+            id: "texture_mordecai",
+            titleKey: "product.texMordecai",
+            subtitleKey: "product.texture.subtitle",
+            category: .texture,
+            tab: nil,
+            slot: .texture,
+            packageNames: ["texture_mordecai"],
+            badge: "TEX",
+            noteKey: "product.texture.note"
+        ),
+        PatchProduct(
+            id: "texture_aranha",
+            titleKey: "product.texAranha",
+            subtitleKey: "product.texture.subtitle",
+            category: .texture,
+            tab: nil,
+            slot: .texture,
+            packageNames: ["texture_aranha"],
+            badge: "TEX",
+            noteKey: "product.texture.note"
+        ),
+        PatchProduct(
+            id: "texture_alienx",
+            titleKey: "product.texAlienX",
+            subtitleKey: "product.texture.subtitle",
+            category: .texture,
+            tab: nil,
+            slot: .texture,
+            packageNames: ["texture_alienx"],
+            badge: "TEX",
+            noteKey: "product.texture.note"
+        ),
+
+        // FPS — writes the game preference plist, so it owns its own slot.
+        PatchProduct(
+            id: "fps_120",
+            titleKey: "product.fps120",
+            subtitleKey: "product.fps.subtitle",
+            category: .fps,
+            tab: nil,
+            slot: .fps,
+            packageNames: ["fps_120"],
+            badge: "FPS",
+            noteKey: "product.fps.note"
+        ),
+        PatchProduct(
+            id: "fps_144",
+            titleKey: "product.fps144",
+            subtitleKey: "product.fps.subtitle",
+            category: .fps,
+            tab: nil,
+            slot: .fps,
+            packageNames: ["fps_144"],
+            badge: "FPS",
+            noteKey: "product.fps.note"
         )
     ]
 
@@ -200,6 +281,13 @@ enum FreeFireCatalog {
 
     static func hasPackage(for product: PatchProduct) -> Bool {
         packageURL(for: product) != nil
+    }
+
+    /// True when the package exists only in `Documents/Patches`, i.e. it was
+    /// pulled from the remote library rather than imported by the user.
+    static func isRemotePackage(for product: PatchProduct) -> Bool {
+        guard let url = packageURL(for: product) else { return false }
+        return url.path.hasPrefix(patchesDirectory.path)
     }
 
     static func installedProductCount() -> Int {

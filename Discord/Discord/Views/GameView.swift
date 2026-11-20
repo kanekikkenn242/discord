@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct GameView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var patches: PatchController
+    @EnvironmentObject private var remote: RemotePatches
     @Environment(\.t) private var t
 
     @State private var category: PatchCategory = .aimbot
@@ -20,6 +21,7 @@ struct GameView: View {
             VStack(spacing: 14) {
                 header
                 categoryChips
+                remoteCard
 
                 if category == .aimbot {
                     SegmentedBar(
@@ -64,6 +66,9 @@ struct GameView: View {
             .padding(.top, 10)
         }
         .onAppear {
+            state.refreshPatches()
+        }
+        .onChange(of: remote.lastReport) { _ in
             state.refreshPatches()
         }
         .onChange(of: state.selectedGame) { _ in
@@ -139,6 +144,51 @@ struct GameView: View {
             }
         }
         .appCard(padding: 14)
+    }
+
+    /// Products are pulled from the user's library on demand — the IPA ships
+    /// without a single patch byte.
+    private var remoteCard: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.orange.opacity(0.14))
+                Image(systemName: remote.isSyncing ? "arrow.triangle.2.circlepath" : "icloud.and.arrow.down")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.orange)
+            }
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t("remote.title"))
+                    .font(.system(size: 13, weight: .semibold))
+                Text(remote.isSyncing
+                     ? (remote.progressText ?? t("remote.syncing"))
+                     : (remote.lastReport ?? t("remote.hint")))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                Task {
+                    await remote.sync()
+                    state.refreshPatches()
+                }
+            } label: {
+                Text(remote.isSyncing ? t("remote.syncing") : t("remote.sync"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(remote.isSyncing ? Theme.textSecondary : Theme.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Theme.orange.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(remote.isSyncing)
+        }
+        .appCard(padding: 12)
     }
 
     private var categoryChips: some View {

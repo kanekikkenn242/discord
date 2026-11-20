@@ -196,6 +196,22 @@ final class PairingController: ObservableObject {
             return nil
         }
 
+        // Remote Pairing needs the record `al_pairing_run_host` writes, not a
+        // USB/lockdown pair record from idevicepair or a Mac backup tool. The
+        // two look like plists with certificates, so a bad import only shows up
+        // later as a TLS-PSK failure deep in the tunnel — reject it here.
+        let remoteMarkers = ["altirk", "remotepairing_udid", "host_id", "hostid", "identifier", "escrow_bag"]
+        let usbMarkers = ["hostcertificate", "rootcertificate", "hostprivatekey"]
+        let keys = plist.keys.map { $0.lowercased() }
+        guard keys.contains(where: { remoteMarkers.contains($0) }) else {
+            let looksUSB = keys.contains(where: { usbMarkers.contains($0) })
+            throw PatchServiceError.noAccess(
+                looksUSB
+                    ? "\(url.lastPathComponent) is a USB/lockdown pair record. Remote Pairing needs the pairing.plist this app writes (keys altIRK / remotepairing_udid)."
+                    : "\(url.lastPathComponent) is not a remote pairing file."
+            )
+        }
+
         let udidValue = stringValue(["udid", "uniquedeviceid", "remotepairing_udid", "remotepairing_serial_number"])
         let identifierValue = stringValue(["identifier", "hostid", "host_id"])
         guard udidValue != nil || identifierValue != nil else {

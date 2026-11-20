@@ -44,6 +44,7 @@ struct DiscordApp: App {
             .environmentObject(state.activation)
             .environmentObject(state.pairing)
             .environmentObject(state.log)
+            .environmentObject(RemotePatches.shared)
             .environment(\.t, Localizer(language: state.language))
             .environment(\.locale, state.language.locale)
             .preferredColorScheme(state.appearance.colorScheme)
