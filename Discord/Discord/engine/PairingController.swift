@@ -221,6 +221,14 @@ final class PairingController: ObservableObject {
             for candidate in candidates {
                 for (key, value) in plist where key.lowercased() == candidate {
                     if let text = value as? String, !text.isEmpty { return text }
+                    // Some tools write these keys as raw bytes. Decoding them
+                    // keeps the identity checks below from silently skipping a
+                    // value they could have compared.
+                    if let bytes = value as? Data, !bytes.isEmpty,
+                       let text = String(data: bytes, encoding: .utf8) {
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty { return trimmed }
+                    }
                 }
             }
             return nil
@@ -322,9 +330,8 @@ final class PairingController: ObservableObject {
         if let identifier = identifierValue {
             UserDefaults.standard.set(identifier, forKey: identifierStore)
         }
-        let irkKey = plist.keys.first { $0.lowercased() == "hostaltirk" || $0.lowercased() == "host_alt_irk" || $0.lowercased() == "altirk" }
-        if let irkKey, let irk = plist[irkKey] as? String, !irk.isEmpty {
-            UserDefaults.standard.set(irk, forKey: altIRKStore)
+        if let importedIRK {
+            UserDefaults.standard.set(importedIRK, forKey: altIRKStore)
         }
 
         status = .paired

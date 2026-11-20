@@ -70,6 +70,14 @@ enum ContainerStore {
     // Apple ID: no certificate, no kernel r/w, no MobileHouseArrest identity.
 
     static let escapeCachePrefix = "container.worse."
+    static let escapeScanPrefix = "container.worse.scan."
+    /// Inodes walked per attempt. The app container root cannot be listed
+    /// before the escape is active, so containers are found by inode and the
+    /// cap has to reach the newest install, not just the stock apps.
+    static let escapeScanInodeCap: Int64 = 2_000_000
+    /// A failed scan costs seconds; status refreshes call this repeatedly, so
+    /// a miss backs off instead of stalling every refresh and the tunnel.
+    static let escapeScanRetryInterval: TimeInterval = 20
 
     static func resolveByAppGroupEscape(bundleID: String) -> String? {
         guard let group = MCMAppGroupIdentifier() else {
@@ -84,12 +92,30 @@ enum ContainerStore {
             return PatchPath.canonicalContainerPath(cached)
         }
 
+        // A miss is remembered briefly: the status view resolves the container
+        // on every refresh, and repeating a full inode walk each time makes
+        // the app unresponsive. The retry below still re-scans after 20s.
+        let scanKey = escapeScanPrefix + bundleID
+        if let lastAttempt = UserDefaults.standard.object(forKey: scanKey) as? Date {
+            let elapsed = Date().timeIntervalSince(lastAttempt)
+            if elapsed < escapeScanRetryInterval {
+                log(
+                    "patch: worse_query backoff — retrying in "
+                        + "\(Int(escapeScanRetryInterval - elapsed))s",
+                    level: .info
+                )
+                return nil
+            }
+        }
+        UserDefaults.standard.set(Date(), forKey: scanKey)
+        logEscapeScanWindow(group: group)
+
         // Containers are numbered by inode on the shared data volume and the
         // scan can only see up to the cap it is given. A 400k cap covers the
         // stock Apple apps but stops before recently installed third-party
         // apps — the game is usually the newest container on the device — so
         // the full range the metadata scan uses is walked here too.
-        var candidates = MCMScanAppContainers(group, 2_000_000)
+        var candidates = MCMScanAppContainers(group, escapeScanInodeCap)
             .filter { isApplicationContainerPath($0) }
         if candidates.isEmpty {
             candidates = enumerateDirectories(path: appDataRoot)
@@ -146,6 +172,7 @@ enum ContainerStore {
 
             if containerBelongsTo(candidate, bundleID: bundleID) {
                 UserDefaults.standard.set(candidate, forKey: escapeCachePrefix + bundleID)
+                UserDefaults.standard.removeObject(forKey: scanKey)
                 log("patch: worse_query matched \(bundleID) at \(candidate)", level: .success)
                 return PatchPath.canonicalContainerPath(candidate)
             }
@@ -170,6 +197,23 @@ enum ContainerStore {
         }
         log("patch: worse_query escaped but found no \(bundleID) container", level: .warning)
         return nil
+    }
+
+    /// The inode window is the only lever when the escape finds nothing, so
+    /// the group container's own inode is logged next to the cap: if it is far
+    /// above the cap, the scan never reaches the newer containers.
+    private static func logEscapeScanWindow(group: String) {
+        guard let url = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: group
+        ) else { return }
+        var info = stat()
+        let inode: UInt64? = url.path.withCString { path in
+            stat(path, &info) == 0 ? UInt64(info.st_ino) : nil
+        }
+        log(
+            "patch: worse_query scanning inodes 1…\(escapeScanInodeCap)"
+                + " (group container inode \(inode.map(String.init) ?? "unknown"))"
+        )
     }
 
     private static func containerIdentifierHint(_ path: String) -> String? {
