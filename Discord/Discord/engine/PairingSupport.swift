@@ -2,7 +2,6 @@ import Foundation
 import AVFoundation
 import Network
 import UIKit
-import BackgroundTasks
 import UserNotifications
 
 // MARK: - Local Network permission
@@ -86,10 +85,9 @@ final class LocalNetworkAuthorization {
 /// host has to survive being backgrounded or it is suspended, its Bonjour
 /// advertisement is withdrawn, and the phone can never connect.
 ///
-/// Three layers, strongest first: a continued-processing task whose system
-/// banner also carries the PIN (iOS 26+), the normal background grace period,
-/// and a silent audio loop, which keeps a `UIBackgroundModes: audio` app alive
-/// for as long as pairing is in progress.
+/// This version uses the APIs available to the iOS 18.5 SDK. The normal
+/// background grace period and silent audio keep-alive remain active while
+/// pairing is in progress.
 final class PairingKeepAlive {
     static let shared = PairingKeepAlive()
 
@@ -98,8 +96,6 @@ final class PairingKeepAlive {
     private var audioRunning = false
 
     private var grace: UIBackgroundTaskIdentifier = .invalid
-    private var continued: AnyObject?
-    private var registeredIdentifier: String?
     private var started = false
 
     // MARK: Lifecycle
@@ -109,13 +105,11 @@ final class PairingKeepAlive {
         requestNotificationPermission()
         startAudio()
         beginGrace()
-        if #available(iOS 26.0, *) { submitContinued() }
     }
 
     func finish(success: Bool) {
         guard started else { return }
         started = false
-        if #available(iOS 26.0, *) { endContinued(success: success) }
         endGrace()
         // Give iOS a moment to hand control back before dropping the audio
         // session, otherwise the app can be suspended on the way out of Settings.
@@ -127,21 +121,15 @@ final class PairingKeepAlive {
 
     func cancel() {
         started = false
-        if #available(iOS 26.0, *) { endContinued(success: false) }
         endGrace()
         stopAudio()
     }
 
     // MARK: PIN
 
-    /// Puts the code where the user can read it while in Settings: on the
-    /// continued-processing banner, and as a notification once the app is gone
-    /// from the foreground.
+    /// Puts the code where the user can read it once the app is in the
+    /// background. It is also retained in the app UI.
     func showPin(_ pin: String, hostName: String) {
-        if #available(iOS 26.0, *), let task = continued as? BGContinuedProcessingTask {
-            task.updateTitle("Pairing code \(pin)", subtitle: "Enter it on this iPhone to pair with \(hostName)")
-            task.progress.completedUnitCount = 1
-        }
         guard UIApplication.shared.applicationState != .active else { return }
         notify(title: "Pairing code \(pin)", body: "Enter this code in Settings › Privacy & Security › Developer Mode.")
     }
@@ -214,81 +202,6 @@ final class PairingKeepAlive {
         player = nil
         engine = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-    }
-
-    // MARK: Continued processing (iOS 26+)
-
-    @available(iOS 26.0, *)
-    private func submitContinued() {
-        guard let identifier = continuedTaskIdentifier() else {
-            log("pairing: no BGTaskSchedulerPermittedIdentifiers entry — relying on audio keep-alive", level: .warning)
-            return
-        }
-
-        if registeredIdentifier != identifier {
-            let registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { [weak self] task in
-                guard let self, let task = task as? BGContinuedProcessingTask else {
-                    task.setTaskCompleted(success: false)
-                    return
-                }
-                self.attach(task)
-            }
-            guard registered else {
-                log("pairing: continued task \(identifier) was refused", level: .warning)
-                return
-            }
-            registeredIdentifier = identifier
-        }
-
-        let request = BGContinuedProcessingTaskRequest(
-            identifier: identifier,
-            title: "Pairing with this iPhone",
-            subtitle: "Settings › Privacy & Security › Developer Mode"
-        )
-        // Queue would start the banner long after the user has paired; fail is
-        // what we want when the slot is not free.
-        request.strategy = .fail
-        do {
-            try BGTaskScheduler.shared.submit(request)
-        } catch {
-            log("pairing: continued task unavailable (\(error.localizedDescription)) — audio keep-alive only", level: .warning)
-        }
-    }
-
-    @available(iOS 26.0, *)
-    private func attach(_ task: BGContinuedProcessingTask) {
-        guard started else {
-            task.setTaskCompleted(success: false)
-            return
-        }
-        continued = task
-        task.progress.totalUnitCount = 2
-        task.progress.completedUnitCount = 0
-        task.expirationHandler = { [weak self] in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                log("pairing: iOS ended the continued task", level: .warning)
-                self.continued = nil
-            }
-        }
-    }
-
-    @available(iOS 26.0, *)
-    private func endContinued(success: Bool) {
-        guard let task = continued as? BGContinuedProcessingTask else { return }
-        task.expirationHandler = nil
-        task.progress.completedUnitCount = task.progress.totalUnitCount
-        task.setTaskCompleted(success: success)
-        continued = nil
-    }
-
-    private func continuedTaskIdentifier() -> String? {
-        let bundle = Bundle.main.bundleIdentifier ?? AppInfo.bundleID
-        let permitted = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String] ?? []
-        if let wildcard = permitted.first(where: { $0.hasPrefix(bundle) && $0.hasSuffix(".*") }) {
-            return String(wildcard.dropLast()) + "session"
-        }
-        return permitted.first { $0.hasPrefix(bundle) }
     }
 
     // MARK: Background grace
