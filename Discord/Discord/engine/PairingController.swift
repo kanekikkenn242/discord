@@ -633,7 +633,8 @@ private final class BonjourPublisher: NSObject, NetServiceDelegate {
 
     func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
         log("pairing: Bonjour publish failed \(errorDict)", level: .error)
-        onFailure?(errorDict[NSNetService.errorCode]?.intValue ?? 0)
+        onFailure?(errorDict[NetService.errorCode]?.intValue ?? 0)
+
     }
 }
 
