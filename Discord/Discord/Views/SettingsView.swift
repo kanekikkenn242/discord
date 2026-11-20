@@ -31,46 +31,47 @@ struct SettingsView: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle(t("settings.title"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(t("common.done")) { dismiss() }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.orange)
+        }
+        .fileImporter(
+            isPresented: $showImport,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else {
+                    log("pairing: no url selected", level: .warning)
+                    return
                 }
-            }
-            .fileImporter(
-                isPresented: $showImport,
-                allowedContentTypes: [.data],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case .success(let urls):
-                    guard let url = urls.first else {
-                        log("pairing: no url selected", level: .warning)
-                        return
-                    }
-                    log("pairing: attempting import of \(url.lastPathComponent)", level: .info)
-                    do {
-                        let path = try pairing.importPairingFile(from: url)
-                        log("pairing: imported OK -> \(path)", level: .success)
-                    } catch {
-                        log("pairing: import failed: \(error)", level: .error)
-                        importError = error.localizedDescription
-                    }
-                case .failure(let error):
+                log("pairing: attempting import of \(url.lastPathComponent)", level: .info)
+                do {
+                    let path = try pairing.importPairingFile(from: url)
+                    log("pairing: imported OK -> \(path)", level: .success)
+                } catch {
+                    log("pairing: import failed: \(error)", level: .error)
                     importError = error.localizedDescription
                 }
+            case .failure(let error):
+                log("pairing: fileImporter failed: \(error)", level: .error)
+                importError = error.localizedDescription
             }
-            .alert(
-                t("settings.pairing.import"),
-                isPresented: Binding(
-                    get: { importError != nil },
-                    set: { if !$0 { importError = nil } }
-                )
-            ) {
-                Button("OK") { importError = nil }
-            } message: {
-                Text(importError ?? "")
+        }
+        .alert(
+            t("settings.pairing.import"),
+            isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )
+        ) {
+            Button("OK") { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(t("common.done")) { dismiss() }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.orange)
             }
         }
     }
