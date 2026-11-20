@@ -74,9 +74,34 @@ final class PairingController: ObservableObject {
     private let queue = DispatchQueue(label: "discord.pairing.host", qos: .userInitiated)
     private var isRunning = false
 
+    /// Bonjour is blocked until Local Network is granted; this asks for it.
+    private let localNetwork = LocalNetworkAuthorization()
+
+    /// The user pairs from Settings, so the host must survive backgrounding.
+    private let keepAlive = PairingKeepAlive.shared
+
     private init() {
+        Self.installRustLogger()
         refresh()
         restorePairedDevice()
+    }
+
+    /// The Rust host explains every step — bound port, device connection, PIN —
+    /// through `al_log_init`. Without a subscriber installed those lines are
+    /// lost and a failed advertisement looks like nothing happening at all.
+    private static var rustLoggerInstalled = false
+
+    private static func installRustLogger() {
+        guard !rustLoggerInstalled else { return }
+        rustLoggerInstalled = true
+        let context = Unmanaged.passUnretained(AppLog.shared).toOpaque()
+        let callback: ALLogCallback = { _, message in
+            guard let message else { return }
+            let text = String(cString: message)
+            guard !text.isEmpty else { return }
+            AppLog.shared.append(text, level: .trace)
+        }
+        _ = al_log_init(callback, context)
     }
 
     // MARK: - Paths
@@ -124,11 +149,11 @@ final class PairingController: ObservableObject {
         case .idle:
             return hasPairingFile ? "Pairing file ready" : "Not connected"
         case .starting:
-            return "Starting pairing host…"
+            return "Requesting Local Network access…"
         case .waitingForPin:
-            return "Confirm the PIN on your iPhone"
+            return "Enter the PIN in Settings › Developer Mode"
         case .waitingForDevice:
-            return "Open Settings → Developer Mode on the iPhone"
+            return "Advertising — open Settings › Privacy & Security › Developer Mode"
         case .paired:
             return "Paired"
         case .connected:
@@ -167,10 +192,15 @@ final class PairingController: ObservableObject {
             data = try? Data(contentsOf: readURL)
         }
         if let coordinatorError {
-            throw PatchServiceError.noAccess("could not read \(url.lastPathComponent): \(coordinatorError.localizedDescription)")
+            log("pairing: coordinated read failed (\(coordinatorError.localizedDescription)); retrying directly", level: .warning)
+        }
+        // Files from iCloud Drive and third-party providers occasionally refuse
+        // the coordinated read; a plain read still works once the item is local.
+        if data == nil || data?.isEmpty == true {
+            data = try? Data(contentsOf: url, options: .mappedIfSafe)
         }
         guard let data, !data.isEmpty else {
-            throw PatchServiceError.pairingRequired
+            throw PatchServiceError.noAccess("\(url.lastPathComponent) is empty or could not be read. Copy it into On My iPhone › Discord first, then import again.")
         }
 
         // A real pairing file is a plist with a UDID and host identity keys.
@@ -200,7 +230,10 @@ final class PairingController: ObservableObject {
         // USB/lockdown pair record from idevicepair or a Mac backup tool. The
         // two look like plists with certificates, so a bad import only shows up
         // later as a TLS-PSK failure deep in the tunnel — reject it here.
-        let remoteMarkers = ["altirk", "remotepairing_udid", "host_id", "hostid", "identifier", "escrow_bag"]
+        let remoteMarkers = [
+            "altirk", "host_alt_irk", "hostaltirk", "remotepairing_udid", "remotepairing_serial_number",
+            "host_id", "hostid", "identifier", "escrow_bag"
+        ]
         let usbMarkers = ["hostcertificate", "rootcertificate", "hostprivatekey"]
         let keys = plist.keys.map { $0.lowercased() }
         guard keys.contains(where: { remoteMarkers.contains($0) }) else {
@@ -212,12 +245,14 @@ final class PairingController: ObservableObject {
             )
         }
 
+        // Values can be stored as strings or as raw `Data` depending on which
+        // tool produced the record, so identity is optional here: the marker
+        // keys above already prove this is an RPPairing record, and the tunnel
+        // reports precisely when a record cannot be used.
         let udidValue = stringValue(["udid", "uniquedeviceid", "remotepairing_udid", "remotepairing_serial_number"])
         let identifierValue = stringValue(["identifier", "hostid", "host_id"])
-        guard udidValue != nil || identifierValue != nil else {
-            throw PatchServiceError.noAccess(
-                "\(url.lastPathComponent) is not a pairing file (no device or host identifier)"
-            )
+        if udidValue == nil && identifierValue == nil {
+            log("pairing: imported file carries no plain device/host identifier — keeping it anyway", level: .warning)
         }
 
         try FileManager.default.createDirectory(
@@ -288,7 +323,20 @@ final class PairingController: ObservableObject {
         status = .starting
         log("pairing: starting RPPairing host", level: .info)
 
-        let name = AppInfo.displayMachineName
+        // Publishing is only possible once Local Network is granted, and a
+        // refused permission is invisible in the Developer Mode list. Ask for
+        // it first, then bind the host.
+        localNetwork.request { [weak self] authorized in
+            guard let self, self.runGeneration == generation else { return }
+            guard self.isRunning else { return }
+            log("pairing: local network probe finished (authorized=\(authorized))", level: .info)
+            self.keepAlive.begin()
+            self.launchHost(generation: generation)
+        }
+    }
+
+    private func launchHost(generation: Int) {
+        let name = AppInfo.displayName
         let model = Self.pairableHostModel
         let outPath = Self.pairingFileURL.path
         let altIRK = UserDefaults.standard.string(forKey: altIRKStore) ?? ""
@@ -342,6 +390,7 @@ final class PairingController: ObservableObject {
                     self.refresh()
                     self.status = .paired
                     self.errorMessage = nil
+                    self.keepAlive.finish(success: true)
                     log("pairing: device paired — pairing.plist written", level: .success)
                 } else {
                     let detail = failure.isEmpty
@@ -349,6 +398,7 @@ final class PairingController: ObservableObject {
                         : failure
                     self.status = .failed(detail)
                     self.errorMessage = detail
+                    self.keepAlive.finish(success: false)
                     log("pairing: \(detail)", level: .error)
                 }
             }
@@ -365,6 +415,7 @@ final class PairingController: ObservableObject {
         isRunning = false
         currentPin = nil
         stopBonjour()
+        keepAlive.cancel()
         status = .idle
         errorMessage = nil
         log("pairing: host cancelled by the user", level: .warning)
@@ -421,6 +472,7 @@ final class PairingController: ObservableObject {
 
     func disconnect() {
         stopBonjour()
+        keepAlive.cancel()
         runGeneration += 1
         isRunning = false
         currentPin = nil
@@ -468,7 +520,8 @@ final class PairingController: ObservableObject {
             guard let self else { return }
             self.currentPin = pin
             self.status = .waitingForPin
-            log("pairing: PIN \(pin) — confirm it on the iPhone", level: .info)
+            self.keepAlive.showPin(pin, hostName: AppInfo.displayName)
+            log("pairing: PIN \(pin) — enter it in Settings › Developer Mode", level: .info)
         }
     }
 
@@ -486,33 +539,40 @@ final class PairingController: ObservableObject {
             return
         }
 
-        // TXT records must be length-prefixed RFC 1464 encoding. The device
-        // filters on `identifier`/`authTag`, so drop nothing that the host gave us.
-        var record = Data()
-        for (key, value) in txt.sorted(by: { $0.key < $1.key }) {
-            guard let keyData = key.data(using: .utf8),
-                  let valueData = value.data(using: .utf8),
-                  keyData.count < 255,
-                  valueData.count < 255 else { continue }
-            record.append(UInt8(keyData.count))
-            record.append(keyData)
-            record.append(UInt8(valueData.count))
-            record.append(valueData)
+        // TXT records are RFC 1464 `key=value` entries, each length-prefixed.
+        // `NetService.data(fromTXTRecord:)` produces that exact encoding; writing
+        // the length prefixes by hand emits `key` and `value` as two separate
+        // entries, so the device never sees `identifier`/`authTag` and refuses
+        // to list the host at all.
+        var record: [String: Data] = [:]
+        for (key, value) in txt {
+            guard !key.isEmpty, !value.isEmpty else { continue }
+            record[key] = Data(value.utf8)
         }
 
         // Instance name == identifier: it is what the authTag was computed over,
         // so an already-paired device recognises this host instead of a stranger.
         let service = NetService(
-            domain: "local.",
+            domain: "",
             type: Self.pairableHostServiceType,
             name: serviceID,
             port: Int32(port)
         )
         if !record.isEmpty {
-            service.setTXTRecord(record)
+            service.setTXTRecord(NetService.data(fromTXTRecord: record))
         }
 
-        let publisher = BonjourPublisher(service: service)
+        let publisher = BonjourPublisher(service: service) { [weak self] code in
+            guard let self else { return }
+            // -65555 is kDNSServiceErr_PolicyDenied: the Local Network switch.
+            let detail = code == -65555
+                ? "Local Network access is off. Enable it in Settings › Apps › Discord › Local Network, then start pairing again."
+                : "Could not publish the pairing service (Bonjour error \(code)). Check Wi-Fi and the Local Network permission."
+            self.status = .failed(detail)
+            self.errorMessage = detail
+            self.keepAlive.cancel()
+            log("pairing: \(detail)", level: .error)
+        }
         publisher.publish()
         bonjour = publisher
         bonjourServiceName = serviceID
@@ -547,9 +607,11 @@ final class PairingController: ObservableObject {
 /// Developer Mode — lands in the app log instead of vanishing.
 private final class BonjourPublisher: NSObject, NetServiceDelegate {
     private let service: NetService
+    private let onFailure: ((Int) -> Void)?
 
-    init(service: NetService) {
+    init(service: NetService, onFailure: ((Int) -> Void)? = nil) {
         self.service = service
+        self.onFailure = onFailure
         super.init()
     }
 
@@ -571,6 +633,7 @@ private final class BonjourPublisher: NSObject, NetServiceDelegate {
 
     func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
         log("pairing: Bonjour publish failed \(errorDict)", level: .error)
+        onFailure?(errorDict[NSNetServicesErrorCode]?.intValue ?? 0)
     }
 }
 

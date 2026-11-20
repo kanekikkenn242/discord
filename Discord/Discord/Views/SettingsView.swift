@@ -288,6 +288,22 @@ struct SettingsView: View {
                     .buttonStyle(SecondaryButtonStyle())
                 }
 
+                // A refused Local Network permission is the one pairing failure
+                // the user cannot recover from inside the app.
+                if case .failed = pairing.status {
+                    Button {
+                        state.openSystemSettings()
+                    } label: {
+                        Text(t("settings.pairing.openSettings"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.orange)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Theme.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if pairing.hasPairingFile {
                     Button {
                         pairing.forgetPairing()

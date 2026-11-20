@@ -82,6 +82,14 @@
     </array>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Discord advertises the pairing host on your local network so this iPhone can pair with itself in Developer Mode.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.apple.mobile.MobileHouseArrest.pairing.*</string>
+    </array>
     <key>NSDocumentsFolderUsageDescription</key>
     <string>Discord reads and writes .3105 packages and pairing files in Documents.</string>
     <key>LSRequiresIPhoneOS</key>
