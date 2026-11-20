@@ -48,6 +48,22 @@ enum PatchRuntime {
             // this app, so probe InstallationProxy before reporting it.
             let detail = tunnel.lastError
             log("patch: vend container refused — \(detail)", level: .error)
+
+            // House Arrest only refused to *open* the container; the probe
+            // still reports where it lives, and that path is all the free
+            // worse_query escape needs. Try it before giving up.
+            if PairingRouteDiagnosis.containerPath(
+                pairingPath: pairingPath,
+                bundleID: game.rawValue
+            ) != nil,
+               let root = ContainerStore.resolveAppContainerPath(bundleID: game.rawValue) {
+                log(
+                    "patch: backend = worse_query at \(root) after the pairing probe",
+                    level: .success
+                )
+                return try body(LocalPatchFileSystem(rootPath: root))
+            }
+
             throw PatchServiceError.noAccess(
                 PairingRouteDiagnosis.explain(
                     detail: detail,
@@ -165,6 +181,10 @@ enum PairingRouteDiagnosis {
 
         guard code == 0, let container else { return nil }
         let text = String(cString: container)
-        return text.isEmpty ? nil : text
+        guard !text.isEmpty else { return nil }
+        // Hand the path to the escape: House Arrest refuses App Store apps,
+        // but worse_query only needs to know which container to target.
+        ContainerStore.noteContainerPath(text, bundleID: bundleID)
+        return text
     }
 }

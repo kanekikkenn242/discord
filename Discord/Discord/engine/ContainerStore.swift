@@ -71,10 +71,16 @@ enum ContainerStore {
 
     static let escapeCachePrefix = "container.worse."
     static let escapeScanPrefix = "container.worse.scan."
-    /// Inodes walked per attempt. The app container root cannot be listed
-    /// before the escape is active, so containers are found by inode and the
-    /// cap has to reach the newest install, not just the stock apps.
-    static let escapeScanInodeCap: Int64 = 2_000_000
+    /// Container path reported by the pairing tunnel (InstallationProxy). It
+    /// is exact, so it is tried before any inode walk.
+    static let escapeHintPrefix = "container.hint."
+    /// Rise of the inode walk when the group container's own inode is unknown.
+    /// A fixed 2M cap stops before the newest containers: on iOS 27 the group
+    /// container inode is already 16M, so every third-party app sits above it.
+    static let escapeScanInodeBase: Int64 = 2_000_000
+    /// Inodes walked on each side of the group container inode first; a miss
+    /// falls back to the full range anchored to that same inode.
+    static let escapeScanWindow: Int64 = 1_000_000
     /// A failed scan costs seconds; status refreshes call this repeatedly, so
     /// a miss backs off instead of stalling every refresh and the tunnel.
     static let escapeScanRetryInterval: TimeInterval = 20
@@ -90,6 +96,20 @@ enum ContainerStore {
            containerBelongsTo(cached, bundleID: bundleID) {
             log("patch: worse_query reused cached container \(cached)")
             return PatchPath.canonicalContainerPath(cached)
+        }
+
+        // A path reported by the pairing tunnel costs one activate call, no
+        // inode walk and no back-off wait, and it is the only way to reach a
+        // container the scan window does not cover.
+        if let hint = knownContainerHint(bundleID: bundleID),
+           activateEscape(hint, group: group),
+           containerBelongsTo(hint, bundleID: bundleID) {
+            rememberEscapeContainer(hint, bundleID: bundleID)
+            log(
+                "patch: worse_query matched \(bundleID) at \(hint) (path from pairing)",
+                level: .success
+            )
+            return PatchPath.canonicalContainerPath(hint)
         }
 
         // A miss is remembered briefly: the status view resolves the container
@@ -111,11 +131,11 @@ enum ContainerStore {
         logEscapeScanWindow(group: group)
 
         // Containers are numbered by inode on the shared data volume and the
-        // scan can only see up to the cap it is given. A 400k cap covers the
-        // stock Apple apps but stops before recently installed third-party
-        // apps — the game is usually the newest container on the device — so
-        // the full range the metadata scan uses is walked here too.
-        var candidates = MCMScanAppContainers(group, escapeScanInodeCap)
+        // scan can only see up to the cap it is given. Recent iOS numbers the
+        // app containers far above any fixed cap (the group container alone is
+        // at 16M+ on 27.x), so the window around the group container's inode is
+        // walked first and the full range still ends past it.
+        var candidates = scanCandidates(group: group)
             .filter { isApplicationContainerPath($0) }
         if candidates.isEmpty {
             candidates = enumerateDirectories(path: appDataRoot)
@@ -171,8 +191,7 @@ enum ContainerStore {
             }
 
             if containerBelongsTo(candidate, bundleID: bundleID) {
-                UserDefaults.standard.set(candidate, forKey: escapeCachePrefix + bundleID)
-                UserDefaults.standard.removeObject(forKey: scanKey)
+                rememberEscapeContainer(candidate, bundleID: bundleID)
                 log("patch: worse_query matched \(bundleID) at \(candidate)", level: .success)
                 return PatchPath.canonicalContainerPath(candidate)
             }
@@ -199,19 +218,78 @@ enum ContainerStore {
         return nil
     }
 
-    /// The inode window is the only lever when the escape finds nothing, so
-    /// the group container's own inode is logged next to the cap: if it is far
-    /// above the cap, the scan never reaches the newer containers.
-    private static func logEscapeScanWindow(group: String) {
+    /// Remembers the data container the pairing tunnel reported for a bundle
+    /// id, so the escape can target it directly instead of walking the volume.
+    static func noteContainerPath(_ path: String, bundleID: String) {
+        let canonical = PatchPath.canonicalContainerPath(path)
+        guard isApplicationContainerPath(canonical) else { return }
+        if UserDefaults.standard.string(forKey: escapeHintPrefix + bundleID) != canonical {
+            log("patch: remembered \(bundleID) container \(canonical)")
+        }
+        UserDefaults.standard.set(canonical, forKey: escapeHintPrefix + bundleID)
+    }
+
+    private static func knownContainerHint(bundleID: String) -> String? {
+        guard let value = UserDefaults.standard.string(forKey: escapeHintPrefix + bundleID),
+              isApplicationContainerPath(value) else {
+            return nil
+        }
+        return value
+    }
+
+    private static func rememberEscapeContainer(_ path: String, bundleID: String) {
+        UserDefaults.standard.set(path, forKey: escapeCachePrefix + bundleID)
+        UserDefaults.standard.removeObject(forKey: escapeScanPrefix + bundleID)
+    }
+
+    private static func groupContainerInode(group: String) -> Int64? {
         guard let url = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: group
-        ) else { return }
+        ) else { return nil }
         var info = stat()
-        let inode: UInt64? = url.path.withCString { path in
-            stat(path, &info) == 0 ? UInt64(info.st_ino) : nil
+        return url.path.withCString { path in
+            stat(path, &info) == 0 ? Int64(info.st_ino) : nil
         }
+    }
+
+    /// Full-range cap, anchored to the group container inode. A cap below that
+    /// inode can never see a container installed on this iOS generation.
+    private static func escapeScanInodeCap(group: String) -> Int64 {
+        guard let inode = groupContainerInode(group: group) else {
+            return escapeScanInodeBase
+        }
+        return max(escapeScanInodeBase, inode + escapeScanInodeBase)
+    }
+
+    private static func scanCandidates(group: String) -> [String] {
+        var candidates: [String] = []
+        var seen: Set<String> = []
+        func collect(_ paths: [String]) {
+            for path in paths where seen.insert(path).inserted {
+                candidates.append(path)
+            }
+        }
+
+        if let inode = groupContainerInode(group: group), inode > 1 {
+            let lower = max(1, inode - escapeScanWindow)
+            collect(MCMScanAppContainersRange(group, lower, inode + escapeScanWindow))
+        }
+        if candidates.isEmpty {
+            collect(MCMScanAppContainersRange(group, 1, escapeScanInodeCap(group: group)))
+        }
+        return candidates
+    }
+
+    /// The inode window is the only lever when the escape finds nothing, so
+    /// the group container's own inode is logged next to the ranges walked.
+    private static func logEscapeScanWindow(group: String) {
+        let inode = groupContainerInode(group: group)
+        let fullCap = escapeScanInodeCap(group: group)
+        let window = inode.map {
+            "\(max(1, $0 - escapeScanWindow))…\($0 + escapeScanWindow) then 1…\(fullCap)"
+        } ?? "1…\(fullCap)"
         log(
-            "patch: worse_query scanning inodes 1…\(escapeScanInodeCap)"
+            "patch: worse_query scanning inodes \(window)"
                 + " (group container inode \(inode.map(String.init) ?? "unknown"))"
         )
     }

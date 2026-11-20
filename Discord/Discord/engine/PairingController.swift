@@ -497,6 +497,12 @@ final class PairingController: ObservableObject {
                 // Proven end-to-end only when a container can be vended.
                 if let container = airlift_find_container(pairingPath: path) {
                     log("pairing: AFC container \(container)", level: .success)
+                    // InstallationProxy reports every installed app, so this
+                    // path is also the seed for the free worse_query escape.
+                    ContainerStore.noteContainerPath(
+                        container,
+                        bundleID: FreeFireGame.freeFire.rawValue
+                    )
                 }
 
                 DispatchQueue.main.async {
