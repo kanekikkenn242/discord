@@ -266,6 +266,32 @@ final class PairingController: ObservableObject {
         // reports precisely when a record cannot be used.
         let udidValue = stringValue(["udid", "uniquedeviceid", "remotepairing_udid", "remotepairing_serial_number"])
         let identifierValue = stringValue(["identifier", "hostid", "host_id"])
+
+        // A record from another app or another device passes every check above
+        // and then dies inside the tunnel as `pair-verify refused` — after it
+        // has already replaced a pairing.plist that was working. Compare the
+        // host identity this app paired with before anything is overwritten.
+        let importedIRK = stringValue(["hostaltirk", "host_alt_irk", "altirk"])
+        let installedIRK = UserDefaults.standard.string(forKey: altIRKStore) ?? ""
+        let installedIdentifier = UserDefaults.standard.string(forKey: identifierStore) ?? ""
+        let hasInstalledFile = Self.pairingFilePath() != nil
+
+        if !installedIRK.isEmpty, let importedIRK, !importedIRK.isEmpty,
+           importedIRK.caseInsensitiveCompare(installedIRK) != .orderedSame {
+            throw PatchServiceError.noAccess(
+                "\(url.lastPathComponent) belongs to a different pairing host (its host_alt_irk does not match). The pairing file written by this app is what the tunnel can replay — pair again from Settings \u{203A} Pairing \u{203A} Tunnel instead."
+            )
+        }
+        if !installedIdentifier.isEmpty, let identifierValue, identifierValue != installedIdentifier {
+            throw PatchServiceError.noAccess(
+                "\(url.lastPathComponent) was written for pairing host \(identifierValue), but this app is paired as \(installedIdentifier). Re-pair from Settings \u{203A} Pairing \u{203A} Tunnel rather than importing another app's file."
+            )
+        }
+        if hasInstalledFile, importedIRK == nil, identifierValue == nil {
+            throw PatchServiceError.noAccess(
+                "\(url.lastPathComponent) carries no host identity, so it cannot be checked against the pairing already installed. The installed pairing.plist was kept — delete it first if you really want to replace it."
+            )
+        }
         if udidValue == nil && identifierValue == nil {
             log("pairing: imported file carries no plain device/host identifier — keeping it anyway", level: .warning)
         }

@@ -84,7 +84,12 @@ enum ContainerStore {
             return PatchPath.canonicalContainerPath(cached)
         }
 
-        var candidates = MCMScanAppContainers(group, 400_000)
+        // Containers are numbered by inode on the shared data volume and the
+        // scan can only see up to the cap it is given. A 400k cap covers the
+        // stock Apple apps but stops before recently installed third-party
+        // apps — the game is usually the newest container on the device — so
+        // the full range the metadata scan uses is walked here too.
+        var candidates = MCMScanAppContainers(group, 2_000_000)
             .filter { isApplicationContainerPath($0) }
         if candidates.isEmpty {
             candidates = enumerateDirectories(path: appDataRoot)
