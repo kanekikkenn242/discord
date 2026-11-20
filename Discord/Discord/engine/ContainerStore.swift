@@ -98,7 +98,14 @@ enum ContainerStore {
         // Containers are addressed by UUID, and the inode scan is the only
         // enumeration available before the escape is active. Probe them in
         // order and stop at the first one that answers for this bundle id.
-        log("patch: worse_query probing \(candidates.count) app containers", level: .info)
+        log(
+            "patch: worse_query probing \(candidates.count) app containers, group \(group)",
+            level: .info
+        )
+        var activated = 0
+        var readable = 0
+        var redirected = 0
+        var seen: [String] = []
         for (index, candidate) in candidates.enumerated() {
             guard activateEscape(candidate, group: group) else {
                 if index % 50 == 0 {
@@ -106,6 +113,32 @@ enum ContainerStore {
                 }
                 continue
             }
+            activated += 1
+
+            // If containermanagerd answers with a different path than the one
+            // the symlink points at, the token belongs to another container
+            // and every read below fails no matter how the match is checked.
+            if let resolved = MCMWorseQueryResolvedPath(candidate) {
+                let canonicalResolved = PatchPath.canonicalContainerPath(resolved)
+                let canonicalCandidate = PatchPath.canonicalContainerPath(candidate)
+                if canonicalResolved != canonicalCandidate {
+                    redirected += 1
+                    if redirected <= 3 {
+                        log(
+                            "patch: worse_query resolved \(canonicalCandidate) as \(canonicalResolved)",
+                            level: .warning
+                        )
+                    }
+                }
+            }
+
+            if let identifier = containerIdentifierHint(candidate) {
+                readable += 1
+                if seen.count < 40, !seen.contains(identifier) {
+                    seen.append(identifier)
+                }
+            }
+
             if containerBelongsTo(candidate, bundleID: bundleID) {
                 UserDefaults.standard.set(candidate, forKey: escapeCachePrefix + bundleID)
                 log("patch: worse_query matched \(bundleID) at \(candidate)", level: .success)
@@ -115,8 +148,30 @@ enum ContainerStore {
         }
 
         MCMWorseQueryReleaseAll()
+        log(
+            "patch: worse_query probed \(candidates.count): activated \(activated),"
+                + " identifiers readable \(readable), resolved elsewhere \(redirected)",
+            level: .warning
+        )
+        if !seen.isEmpty {
+            log("patch: worse_query containers seen: \(seen.sorted().joined(separator: ", "))")
+        }
+        if activated == 0 {
+            log(
+                "patch: worse_query could not activate any container — the App Group"
+                    + " container is not writable by this signature",
+                level: .warning
+            )
+        }
         log("patch: worse_query escaped but found no \(bundleID) container", level: .warning)
         return nil
+    }
+
+    private static func containerIdentifierHint(_ path: String) -> String? {
+        if let metadata = readContainerMetadata(containerPath: path), !metadata.bundleID.isEmpty {
+            return metadata.bundleID
+        }
+        return MCMContainerIdentifierForPath(path)
     }
 
     private static func activateEscape(_ path: String, group: String) -> Bool {
@@ -142,6 +197,11 @@ enum ContainerStore {
     private static func containerBelongsTo(_ path: String, bundleID: String) -> Bool {
         if let metadata = readContainerMetadata(containerPath: path),
            metadata.bundleID == bundleID {
+            return true
+        }
+        // The metadata keys have moved between iOS releases, so the record is
+        // also searched as raw bytes before the container is written off.
+        if metadataRecordContains(path, bundleID: bundleID) {
             return true
         }
         if MCMContainerIdentifierForPath(path) == bundleID {
@@ -213,6 +273,21 @@ enum ContainerStore {
             log("enumerate: inode fallback for \(clean) -> \(list.count) entries")
         }
         return list
+    }
+
+    private static func metadataRecordContains(_ containerPath: String, bundleID: String) -> Bool {
+        let metadataPath = (containerPath as NSString).appendingPathComponent(
+            ".com.apple.mobile_container_manager.metadata.plist"
+        )
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: metadataPath)),
+              !data.isEmpty else {
+            return false
+        }
+        var needles = [Data(bundleID.utf8)]
+        if let utf16 = bundleID.data(using: .utf16LittleEndian) {
+            needles.append(utf16)
+        }
+        return needles.contains { data.range(of: $0) != nil }
     }
 
     static func readContainerMetadata(containerPath: String) -> ContainerMetadata? {

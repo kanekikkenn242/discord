@@ -245,6 +245,21 @@ final class PairingController: ObservableObject {
             )
         }
 
+        // A lockdown/USB record also carries `HostID` and certificates, so the
+        // marker list alone cannot tell it apart from an RPPairing record. The
+        // tunnel deserializes `public_key`, so that field is the real test: a
+        // lockdown record imported here would otherwise replace a working
+        // pairing.plist and fail later with "missing field `public_key`".
+        let publicKeyKeys: Set<String> = ["publickey", "public_key"]
+        guard keys.contains(where: { publicKeyKeys.contains($0) }) else {
+            let looksUSB = keys.contains(where: { usbMarkers.contains($0) })
+            throw PatchServiceError.noAccess(
+                looksUSB
+                    ? "\(url.lastPathComponent) is a USB/lockdown pair record (no `public_key`). Remote Pairing needs the pairing.plist this app writes — pair from Settings › Pairing \u{203A} Tunnel instead."
+                    : "\(url.lastPathComponent) has no `public_key`, so the Remote Pairing tunnel cannot use it."
+            )
+        }
+
         // Values can be stored as strings or as raw `Data` depending on which
         // tool produced the record, so identity is optional here: the marker
         // keys above already prove this is an RPPairing record, and the tunnel
