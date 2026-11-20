@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Patch card
 
@@ -98,6 +99,8 @@ struct LogConsole: View {
     @EnvironmentObject private var log: AppLog
     @Environment(\.t) private var t
 
+    @State private var copied = false
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -108,6 +111,32 @@ struct LogConsole: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
+                // The console is not selectable text; these two buttons are
+                // the only way to get a failure report off the device.
+                Button {
+                    UIPasteboard.general.string = log.transcript
+                    copied = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_600_000_000)
+                        copied = false
+                    }
+                } label: {
+                    Text(t(copied ? "common.copied" : "common.copy"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(copied ? Theme.green : Theme.orange)
+                }
+                .buttonStyle(.plain)
+                .disabled(log.entries.isEmpty)
+
+                if !log.entries.isEmpty {
+                    ShareLink(item: log.transcript) {
+                        Text(t("common.share"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.orange)
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Button {
                     log.clear()
                 } label: {

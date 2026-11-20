@@ -49,10 +49,11 @@ final class PatchController: ObservableObject {
                 backendName = outcome.1
             } catch {
                 let message = Self.short(error)
+                let full = Self.full(error)
                 for product in products where FreeFireCatalog.hasPackage(for: product) {
                     resolved[product.id] = .unavailable(message)
                 }
-                log("patch: status unavailable — \(message)", level: .warning)
+                log("patch: status unavailable — \(full)", level: .warning)
             }
 
             let finalStatuses = resolved
@@ -157,18 +158,23 @@ final class PatchController: ObservableObject {
                 }
             } catch {
                 let message = Self.short(error)
-                log("ui: \(productID) failed — \(message)", level: .error)
+                let full = Self.full(error)
+                log("ui: \(productID) failed — \(full)", level: .error)
                 await MainActor.run {
                     self.busyProductID = nil
-                    self.lastError = message
+                    self.lastError = full
                     self.statuses[productID] = .unavailable(message)
                 }
             }
         }
     }
 
+    private nonisolated static func full(_ error: Error) -> String {
+        (error as? PatchServiceError)?.errorDescription ?? error.localizedDescription
+    }
+
     private nonisolated static func short(_ error: Error) -> String {
-        let text = (error as? PatchServiceError)?.errorDescription ?? error.localizedDescription
+        let text = full(error)
         return text.count > 96 ? String(text.prefix(93)) + "…" : text
     }
 }

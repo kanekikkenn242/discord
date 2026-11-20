@@ -27,7 +27,8 @@ enum PatchRuntime {
 
         guard let pairingPath = PairingController.pairingFilePath() else {
             throw PatchServiceError.noAccess(
-                "MCM did not resolve \(game.rawValue) and no pairing file is installed"
+                "MCM did not resolve \(game.rawValue) and no pairing file is installed. "
+                + "Import a pairing file, or start pairing and allow Developer Mode on this iPhone."
             )
         }
 
@@ -37,7 +38,23 @@ enum PatchRuntime {
         log("patch: connecting pairing tunnel for \(game.rawValue)", level: .info)
         try tunnel.connect(pairingPath: pairingPath)
         log("patch: tunnel connected — vending \(game.rawValue)", level: .success)
-        try tunnel.vendContainer(bundleID: game.rawValue)
+
+        do {
+            try tunnel.vendContainer(bundleID: game.rawValue)
+        } catch {
+            // House Arrest answers with a bare device string such as
+            // `InstallationLookupFailed`; on its own it reads like a bug in
+            // this app, so probe InstallationProxy before reporting it.
+            let detail = tunnel.lastError
+            log("patch: vend container refused — \(detail)", level: .error)
+            throw PatchServiceError.noAccess(
+                PairingRouteDiagnosis.explain(
+                    detail: detail,
+                    game: game,
+                    pairingPath: pairingPath
+                )
+            )
+        }
 
         let fileSystem = AirliftPatchFileSystem(tunnel: tunnel)
         return try body(fileSystem)
@@ -76,5 +93,76 @@ enum PatchRuntime {
             return "pairing/AFC"
         }
         return "not available"
+    }
+}
+
+/// Turns a bare House Arrest refusal into something the user can act on.
+///
+/// `InstallationLookupFailed` is the device's own answer, not an app error:
+/// iOS vends the container of a development/enterprise-signed app over the
+/// pairing tunnel, and refuses App Store apps even though their container
+/// exists. Probing InstallationProxy separates "the game is not installed"
+/// from "iOS will not hand this container out through House Arrest".
+enum PairingRouteDiagnosis {
+    static func explain(detail: String, game: FreeFireGame, pairingPath: String) -> String {
+        let lowered = detail.lowercased()
+        let lookupFailure = lowered.contains("installationlookup")
+            || lowered.contains("applicationlookup")
+        let permissionFailure = lowered.contains("perm_denied")
+            || lowered.contains("permission")
+
+        guard lookupFailure || permissionFailure else {
+            return "House Arrest rejected the \(game.rawValue) container: \(detail)"
+        }
+
+        let container = containerPath(pairingPath: pairingPath, bundleID: game.rawValue)
+
+        if let container {
+            log(
+                "patch: \(game.rawValue) is installed at \(container) — House Arrest still refused the vending",
+                level: .warning
+            )
+            return "iOS refused to open the \(game.displayName) container (\(detail)). "
+                + "The app is installed (\(container)), but the pairing tunnel only vends containers of "
+                + "development/enterprise-signed apps — App Store apps are refused on this iOS version. "
+                + "Use the MCM/kernel route, or sign and install the game with a development profile."
+        }
+
+        let other = FreeFireGame.allCases.first { $0 != game }
+        let otherInstalled = other.flatMap {
+            containerPath(pairingPath: pairingPath, bundleID: $0.rawValue)
+        }
+
+        if let other, let otherInstalled {
+            log("patch: \(other.rawValue) is installed at \(otherInstalled)", level: .warning)
+            return "\(game.displayName) (\(game.rawValue)) is not installed on this iPhone. "
+                + "\(other.displayName) is — switch the game in Profile › Game and try again."
+        }
+
+        return "No installed app with bundle id \(game.rawValue) answered InstallationProxy "
+            + "(\(detail)). Install \(game.displayName) on this iPhone, or pick the other game in "
+            + "Profile › Game. Also check that the imported pairing file belongs to this device."
+    }
+
+    /// Absolute data-container path from InstallationProxy. Unlike House
+    /// Arrest this works for every installed app, so it is a reliable probe.
+    static func containerPath(pairingPath: String, bundleID: String) -> String? {
+        var container: UnsafeMutablePointer<CChar>?
+        var error: UnsafeMutablePointer<CChar>?
+
+        let code = pairingPath.withCString { path in
+            bundleID.withCString { bundle in
+                al_find_app_container(path, bundle, nil, nil, &container, &error)
+            }
+        }
+
+        defer {
+            if let error { al_string_free(error) }
+            if let container { al_string_free(container) }
+        }
+
+        guard code == 0, let container else { return nil }
+        let text = String(cString: container)
+        return text.isEmpty ? nil : text
     }
 }

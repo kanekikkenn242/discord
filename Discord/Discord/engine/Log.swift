@@ -61,6 +61,13 @@ final class AppLog: ObservableObject {
             self.revision &+= 1
         }
     }
+
+    /// Plain-text copy of every visible line, for the Copy / Share buttons.
+    var transcript: String {
+        entries
+            .map { "\($0.timestamp) \($0.level.rawValue) \($0.message)" }
+            .joined(separator: "\n")
+    }
 }
 
 func log(_ message: String, level: LogLevel = .info) {
