@@ -134,7 +134,7 @@ final class AppState: ObservableObject {
 
     func setPatch(_ product: PatchProduct, enabled: Bool) {
         guard activation.isActivated else {
-            log("ui: activation required before patching", level: .warning)
+            Discord.log("ui: activation required before patching", level: .warning)
             showActivation = true
             return
         }
