@@ -40,15 +40,21 @@ struct SettingsView: View {
             }
             .fileImporter(
                 isPresented: $showImport,
-                allowedContentTypes: [.propertyList, .data],
+                allowedContentTypes: [.data],
                 allowsMultipleSelection: false
             ) { result in
                 switch result {
                 case .success(let urls):
-                    guard let url = urls.first else { return }
+                    guard let url = urls.first else {
+                        log("pairing: no url selected", level: .warning)
+                        return
+                    }
+                    log("pairing: attempting import of \(url.lastPathComponent)", level: .info)
                     do {
-                        try pairing.importPairingFile(from: url)
+                        let path = try pairing.importPairingFile(from: url)
+                        log("pairing: imported OK -> \(path)", level: .success)
                     } catch {
+                        log("pairing: import failed: \(error)", level: .error)
                         importError = error.localizedDescription
                     }
                 case .failure(let error):

@@ -141,9 +141,8 @@ final class PairingController: ObservableObject {
     @discardableResult
     func importPairingFile(from url: URL) throws -> String {
         let scoped = url.startAccessingSecurityScopedResource()
-        defer {
-            if scoped { url.stopAccessingSecurityScopedResource() }
-        }
+        log("pairing: scoped access = \(scoped) for \(url.lastPathComponent)", level: .info)
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
         let data: Data
         do {
