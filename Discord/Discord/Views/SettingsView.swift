@@ -34,7 +34,7 @@ struct SettingsView: View {
         }
         .fileImporter(
             isPresented: $showImport,
-            allowedContentTypes: [.data],
+            allowedContentTypes: [.data, .propertyList, .xml, .json],
             allowsMultipleSelection: false
         ) { result in
             switch result {

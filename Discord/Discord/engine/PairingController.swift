@@ -144,23 +144,34 @@ final class PairingController: ObservableObject {
         log("pairing: scoped access = \(scoped) for \(url.lastPathComponent)", level: .info)
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw PatchServiceError.noAccess("could not read \(url.lastPathComponent)")
+        // fileImporter URLs are security-scoped on iOS; read through a
+        // coordinated accessor so we do not depend on the scoped flag.
+        let coordinator = NSFileCoordinator()
+        var coordinatorError: NSError?
+        var data: Data?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinatorError) { readURL in
+            data = try? Data(contentsOf: readURL)
         }
-
-        guard !data.isEmpty else {
+        if let coordinatorError {
+            throw PatchServiceError.noAccess("could not read \(url.lastPathComponent): \(coordinatorError.localizedDescription)")
+        }
+        guard let data, !data.isEmpty else {
             throw PatchServiceError.pairingRequired
         }
 
         // A real pairing file is a plist with a UDID and host identity keys.
+        // Accept the common key spellings used by idevicepair / X exports.
         guard let plist = try? PropertyListSerialization.propertyList(
             from: data,
             options: [],
             format: nil
-        ) as? [String: Any], plist["UDID"] != nil else {
+        ) as? [String: Any] else {
+            throw PatchServiceError.noAccess(
+                "\(url.lastPathComponent) is not a valid plist"
+            )
+        }
+        let udidKey = plist.keys.first { $0.lowercased() == "udid" || $0.lowercased() == "uniquedeviceid" }
+        guard let udidKey, let udidValue = plist[udidKey] as? String, !udidValue.isEmpty else {
             throw PatchServiceError.noAccess(
                 "\(url.lastPathComponent) is not a pairing file (no UDID key)"
             )
@@ -181,15 +192,17 @@ final class PairingController: ObservableObject {
         hasPairingFile = true
         pairingFilePathOnDevice = destination.path
 
-        if let name = plist["DeviceName"] as? String {
+        let nameKey = plist.keys.first { $0.lowercased() == "devicename" || $0.lowercased() == "device_name" || $0.lowercased() == "name" }
+        if let nameKey, let name = plist[nameKey] as? String {
             pairedDeviceName = name
             UserDefaults.standard.set(name, forKey: "discord.pairing.deviceName")
         }
-        if let udid = plist["UDID"] as? String {
+        if let udid = plist[udidKey] as? String {
             pairedDeviceUDID = udid
             UserDefaults.standard.set(udid, forKey: "discord.pairing.deviceUDID")
         }
-        if let irk = plist["HostAltIRK"] as? String, !irk.isEmpty {
+        let irkKey = plist.keys.first { $0.lowercased() == "hostaltirk" || $0.lowercased() == "host_alt_irk" || $0.lowercased() == "altirk" }
+        if let irkKey, let irk = plist[irkKey] as? String, !irk.isEmpty {
             UserDefaults.standard.set(irk, forKey: altIRKStore)
         }
 
