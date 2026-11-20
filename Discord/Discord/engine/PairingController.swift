@@ -50,12 +50,26 @@ final class PairingController: ObservableObject {
     @Published private(set) var pairingFilePathOnDevice: String?
     @Published var errorMessage: String?
 
+    /// The DNS-SD type the device browses for when it looks for a pairable
+    /// host. This is fixed: `al_pairing_run_host` hands back the pairing-file
+    /// *identifier* in the ready callback, not a service type, so deriving the
+    /// type from it publishes `_<uuid>._tcp` and the iPhone never sees us.
+    private static let pairableHostServiceType = "_remotepairing-pairable-host._tcp."
+
+    /// iOS treats a pairable host as a computer. An iPhone model string is
+    /// rejected, so the host record disappears from Settings → Developer Mode.
+    private static let pairableHostModel = "Mac17,7"
+
     /// Kept across launches: the RPPairing host returns a per-host identity
     /// (`host_alt_irk_hex`) that must be replayed on the next run, otherwise
     /// the device treats the host as a new machine and drops the pairing.
     private let altIRKStore = "discord.pairing.hostAltIRK"
 
-    private var service: NetService?
+    /// Bonjour service instance name from the last run — the identifier the
+    /// device pairs against. Must be replayed so the authTag stays valid.
+    private let identifierStore = "discord.pairing.hostIdentifier"
+
+    private var bonjour: BonjourPublisher?
     private var runGeneration = 0
     private let queue = DispatchQueue(label: "discord.pairing.host", qos: .userInitiated)
     private var isRunning = false
@@ -114,7 +128,7 @@ final class PairingController: ObservableObject {
         case .waitingForPin:
             return "Confirm the PIN on your iPhone"
         case .waitingForDevice:
-            return "Waiting for the iPhone to pair…"
+            return "Open Settings → Developer Mode on the iPhone"
         case .paired:
             return "Paired"
         case .connected:
@@ -170,10 +184,23 @@ final class PairingController: ObservableObject {
                 "\(url.lastPathComponent) is not a valid plist"
             )
         }
-        let udidKey = plist.keys.first { $0.lowercased() == "udid" || $0.lowercased() == "uniquedeviceid" }
-        guard let udidKey, let udidValue = plist[udidKey] as? String, !udidValue.isEmpty else {
+        // Device key spellings: lockdown pair records use `UDID`, while an
+        // RPPairing file produced by this app (or by X) uses
+        // `remotepairing_udid` / `remotepairing_serial_number`.
+        func stringValue(_ candidates: [String]) -> String? {
+            for candidate in candidates {
+                for (key, value) in plist where key.lowercased() == candidate {
+                    if let text = value as? String, !text.isEmpty { return text }
+                }
+            }
+            return nil
+        }
+
+        let udidValue = stringValue(["udid", "uniquedeviceid", "remotepairing_udid", "remotepairing_serial_number"])
+        let identifierValue = stringValue(["identifier", "hostid", "host_id"])
+        guard udidValue != nil || identifierValue != nil else {
             throw PatchServiceError.noAccess(
-                "\(url.lastPathComponent) is not a pairing file (no UDID key)"
+                "\(url.lastPathComponent) is not a pairing file (no device or host identifier)"
             )
         }
 
@@ -192,14 +219,16 @@ final class PairingController: ObservableObject {
         hasPairingFile = true
         pairingFilePathOnDevice = destination.path
 
-        let nameKey = plist.keys.first { $0.lowercased() == "devicename" || $0.lowercased() == "device_name" || $0.lowercased() == "name" }
-        if let nameKey, let name = plist[nameKey] as? String {
+        if let name = stringValue(["devicename", "device_name", "label", "name"]) {
             pairedDeviceName = name
             UserDefaults.standard.set(name, forKey: "discord.pairing.deviceName")
         }
-        if let udid = plist[udidKey] as? String {
+        if let udid = udidValue {
             pairedDeviceUDID = udid
             UserDefaults.standard.set(udid, forKey: "discord.pairing.deviceUDID")
+        }
+        if let identifier = identifierValue {
+            UserDefaults.standard.set(identifier, forKey: identifierStore)
         }
         let irkKey = plist.keys.first { $0.lowercased() == "hostaltirk" || $0.lowercased() == "host_alt_irk" || $0.lowercased() == "altirk" }
         if let irkKey, let irk = plist[irkKey] as? String, !irk.isEmpty {
@@ -244,7 +273,7 @@ final class PairingController: ObservableObject {
         log("pairing: starting RPPairing host", level: .info)
 
         let name = AppInfo.displayMachineName
-        let model = "iPhone"
+        let model = Self.pairableHostModel
         let outPath = Self.pairingFileURL.path
         let altIRK = UserDefaults.standard.string(forKey: altIRKStore) ?? ""
 
@@ -392,6 +421,7 @@ final class PairingController: ObservableObject {
             try? fileManager.removeItem(at: Self.pairingFileURL)
         }
         UserDefaults.standard.removeObject(forKey: altIRKStore)
+        UserDefaults.standard.removeObject(forKey: identifierStore)
         UserDefaults.standard.removeObject(forKey: "discord.pairing.deviceName")
         UserDefaults.standard.removeObject(forKey: "discord.pairing.deviceModel")
         UserDefaults.standard.removeObject(forKey: "discord.pairing.deviceUDID")
@@ -407,10 +437,12 @@ final class PairingController: ObservableObject {
     // MARK: - Bonjour
 
     /// Called from the host thread when the RPPairing listener is bound.
+    /// `serviceID` is the pairing-file identifier the device hands back in the
+    /// handshake; it is the service *instance name*, not the service type.
     fileprivate func handleReady(serviceID: String, port: Int, txt: [String: String]) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.status = .waitingForPin
+            self.status = .waitingForDevice
             self.advertise(serviceID: serviceID, port: port, txt: txt)
         }
     }
@@ -426,53 +458,55 @@ final class PairingController: ObservableObject {
 
     private func advertise(serviceID: String, port: Int, txt: [String: String]) {
         stopBonjour()
+        guard !serviceID.isEmpty else {
+            let detail = "pairing host returned an empty service identifier"
+            status = .failed(detail)
+            errorMessage = detail
+            log("pairing: \(detail)", level: .error)
+            return
+        }
         guard port > 0, port <= 65_535 else {
             log("pairing: host reported an invalid port \(port)", level: .warning)
             return
         }
 
-        // The Rust side hands us either a bare service id ("rppairing") or a
-        // full Bonjour type ("_rppairing._tcp"). NetService needs the latter.
-        let type: String
-        if serviceID.hasPrefix("_") && serviceID.contains("._tcp") {
-            type = serviceID.hasSuffix(".") ? serviceID : serviceID + "."
-        } else {
-            let bare = serviceID.hasPrefix("_") ? String(serviceID.dropFirst()) : serviceID
-            type = "_\(bare)._tcp."
+        // TXT records must be length-prefixed RFC 1464 encoding. The device
+        // filters on `identifier`/`authTag`, so drop nothing that the host gave us.
+        var record = Data()
+        for (key, value) in txt.sorted(by: { $0.key < $1.key }) {
+            guard let keyData = key.data(using: .utf8),
+                  let valueData = value.data(using: .utf8),
+                  keyData.count < 255,
+                  valueData.count < 255 else { continue }
+            record.append(UInt8(keyData.count))
+            record.append(keyData)
+            record.append(UInt8(valueData.count))
+            record.append(valueData)
         }
 
-        let name = "\(AppInfo.displayName) \(String(UUID().uuidString.prefix(4)))"
+        // Instance name == identifier: it is what the authTag was computed over,
+        // so an already-paired device recognises this host instead of a stranger.
         let service = NetService(
             domain: "local.",
-            type: type,
-            name: name,
+            type: Self.pairableHostServiceType,
+            name: serviceID,
             port: Int32(port)
         )
-
-        if !txt.isEmpty {
-            var record = Data()
-            for (key, value) in txt.sorted(by: { $0.key < $1.key }) {
-                guard let keyData = key.data(using: .utf8),
-                      let valueData = value.data(using: .utf8),
-                      keyData.count < 255,
-                      valueData.count < 255 else { continue }
-                record.append(UInt8(keyData.count))
-                record.append(keyData)
-                record.append(UInt8(valueData.count))
-                record.append(valueData)
-            }
-            service.setTXTRecord(record.isEmpty ? nil : record)
+        if !record.isEmpty {
+            service.setTXTRecord(record)
         }
 
-        service.publish()
-        self.service = service
-        bonjourServiceName = name
-        log("pairing: advertising \(type) on port \(port)", level: .info)
+        let publisher = BonjourPublisher(service: service)
+        publisher.publish()
+        bonjour = publisher
+        bonjourServiceName = serviceID
+        UserDefaults.standard.set(serviceID, forKey: identifierStore)
+        log("pairing: advertising \(Self.pairableHostServiceType) as \(serviceID) on port \(port)", level: .info)
     }
 
     private func stopBonjour() {
-        service?.stop()
-        service = nil
+        bonjour?.stop()
+        bonjour = nil
         bonjourServiceName = nil
     }
 
@@ -486,6 +520,41 @@ final class PairingController: ObservableObject {
         if hasPairingFile, status == .idle {
             status = .paired
         }
+    }
+}
+
+// MARK: - Bonjour
+
+/// `NetService` only reports publish/did-not-publish through a delegate, and
+/// `PairingController` is not an `NSObject`. This shim owns the service so a
+/// silent publish failure — the usual reason the host never shows up in
+/// Developer Mode — lands in the app log instead of vanishing.
+private final class BonjourPublisher: NSObject, NetServiceDelegate {
+    private let service: NetService
+
+    init(service: NetService) {
+        self.service = service
+        super.init()
+    }
+
+    func publish() {
+        service.delegate = self
+        service.schedule(in: .main, forMode: .common)
+        service.publish()
+    }
+
+    func stop() {
+        service.stop()
+        service.remove(from: .main, forMode: .common)
+        service.delegate = nil
+    }
+
+    func netServiceDidPublish(_ sender: NetService) {
+        log("pairing: Bonjour published \(sender.name) on port \(sender.port)", level: .success)
+    }
+
+    func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
+        log("pairing: Bonjour publish failed \(errorDict)", level: .error)
     }
 }
 
