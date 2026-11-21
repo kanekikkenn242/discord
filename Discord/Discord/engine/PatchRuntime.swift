@@ -103,9 +103,10 @@ enum PatchRuntime {
     /// in its own container, so asset rules resolve there when the signed
     /// bundle itself cannot be reached.
     private static func hotUpdateRoot(root: String, game: FreeFireGame) -> String? {
-        let path = (root as NSString)
+        let path = URL(fileURLWithPath: root)
             .appendingPathComponent("Library/Caches")
             .appendingPathComponent(game.rawValue)
+            .path
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
               isDirectory.boolValue else {
