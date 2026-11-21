@@ -107,12 +107,28 @@ enum CacheManifest {
                 var fields = line.components(separatedBy: ",")
                 guard fields.count > 4 else { continue }
                 let old = fields[4].trimmingCharacters(in: .whitespaces)
-                guard old != newGz else { continue }
-                fields[4] = newGz
+                var rowChanged = false
+                if old != newGz {
+                    fields[4] = newGz
+                    notes.append("gz/base64")
+                    rowChanged = true
+                }
+                // Column 5 is the gzip byte count. A recompressed asset rarely
+                // keeps the exact size, so leaving the shipped value makes the
+                // row inconsistent with the digest above it.
+                if fields.count > 5 {
+                    let oldSize = fields[5].trimmingCharacters(in: .whitespaces)
+                    let newSize = String(gz.count)
+                    if oldSize != newSize {
+                        fields[5] = newSize
+                        notes.append("gz/size")
+                        rowChanged = true
+                    }
+                }
+                guard rowChanged else { continue }
                 lines[index] = fields.joined(separator: ",")
                 changed = true
                 matchedCurrent = true
-                notes.append("gz/base64")
             }
             updated = lines.joined(separator: "\n")
         }

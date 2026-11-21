@@ -114,7 +114,7 @@ struct PatchStatusRow {
 enum PatchService {
     // MARK: - Cache token
 
-    static func resolveCacheToken(fileSystem: PatchFileSystem) throws -> String {
+    static func resolveCacheToken(fileSystem: PatchFileSystem, bundleID: String) throws -> String {
         // Free Fire ships the hot-update manifest as `Data/Raw/ios/fileinfo`
         // inside the `.app`; older builds also carried a copy next to the
         // bundles, which is why both shapes are tried.
@@ -122,38 +122,61 @@ enum PatchService {
             "Documents/Data/Raw/ios/fileinfo",
             "Data/Raw/ios/fileinfo",
             "Documents/Data/Raw/ios/gameassetbundles/cache_res.fileinfo",
-            "Data/Raw/ios/gameassetbundles/cache_res.fileinfo"
+            "Data/Raw/ios/gameassetbundles/cache_res.fileinfo",
+            "Documents/contentcache/Compulsory/ios/fileinfo"
         ]
+
+        // The gzip-digest column this resolver reads is the same column our
+        // CacheManifest.repair rewrites. Reading the live manifest after a
+        // repair returns the digest of the patched copy, so the next apply
+        // resolves to that copy instead of the shipped asset and skips the
+        // collider shift. Prefer the pristine manifest captured before any
+        // patching; fall back to the live copy only on a first-ever apply.
+        for candidate in candidates {
+            guard let data = try? BackupStore.read(
+                bundleID: bundleID,
+                relativePath: candidate
+            ), let token = cacheToken(from: data) else { continue }
+            log("patch: cache_res gzip token \(token) (pristine manifest)", level: .trace)
+            return token
+        }
 
         for candidate in candidates {
             guard try fileSystem.exists(candidate) else { continue }
-            let data = try fileSystem.read(candidate)
-            let text = String(data: data, encoding: .utf8)
-                ?? String(data: data, encoding: .isoLatin1)
-                ?? ""
-            for line in text.components(separatedBy: .newlines) {
-                let fields = line
-                    .split(separator: ",", omittingEmptySubsequences: false)
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                guard fields.count >= 5, !fields[4].isEmpty else { continue }
-                if let token = PatchPath.decodeBase64SHA1(fields[4]) {
-                    log("patch: cache_res gzip token \(token)", level: .trace)
-                    return token
-                }
+            if let token = cacheToken(from: try fileSystem.read(candidate)) {
+                log("patch: cache_res gzip token \(token)", level: .trace)
+                return token
             }
         }
 
         throw PatchServiceError.cacheManifestUnavailable
     }
 
+    private static func cacheToken(from data: Data) -> String? {
+        let text = String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .isoLatin1)
+            ?? ""
+        for line in text.components(separatedBy: .newlines) where line.hasPrefix("cache_res,") {
+            let fields = line
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard fields.count >= 5, !fields[4].isEmpty else { continue }
+            if let token = PatchPath.decodeBase64SHA1(fields[4]) {
+                return token
+            }
+        }
+        return nil
+    }
+
     // MARK: - Rule resolution
 
     static func resolvedRules(
         package: PatchPackage,
+        bundleID: String,
         fileSystem: PatchFileSystem
     ) throws -> [(rule: PatchRule, relativePath: String)] {
         let cacheToken = try package.needsCacheToken
-            ? resolveCacheToken(fileSystem: fileSystem)
+            ? resolveCacheToken(fileSystem: fileSystem, bundleID: bundleID)
             : nil
 
         var result: [(rule: PatchRule, relativePath: String)] = []
@@ -213,7 +236,7 @@ enum PatchService {
             try restore(product: product, bundleID: bundleID, package: nil, fileSystem: fileSystem)
         }
 
-        let targets = try resolvedRules(package: package, fileSystem: fileSystem)
+        let targets = try resolvedRules(package: package, bundleID: bundleID, fileSystem: fileSystem)
         let blobs = try targets.map {
             try blob(for: $0, package: package, fileSystem: fileSystem)
         }
@@ -532,7 +555,7 @@ enum PatchService {
            !saved.isEmpty {
             paths = try saved.map { try PatchPath.safeRelative($0) }
         } else if let package {
-            paths = try resolvedRules(package: package, fileSystem: fileSystem)
+            paths = try resolvedRules(package: package, bundleID: bundleID, fileSystem: fileSystem)
                 .map { $0.relativePath }
         } else {
             throw PatchServiceError.packageMissing(product.packageNames.first ?? product.id)
@@ -648,7 +671,7 @@ enum PatchService {
         }
         do {
             let package = try PatchPackage.load(from: url)
-            let targets = try resolvedRules(package: package, fileSystem: fileSystem)
+            let targets = try resolvedRules(package: package, bundleID: bundleID, fileSystem: fileSystem)
             var matching = 0
             for target in targets {
                 guard let source = package.files[target.rule.source] else { continue }
