@@ -6,9 +6,10 @@ protocol PatchFileSystem {
     /// Free Fire keeps `Data/Raw/ios/gameassetbundles` inside the signed
     /// bundle, not in the data container, so asset rules only resolve there.
     var bundleRoot: String? { get }
-    /// `Library/Caches/<bundle id>`: the tree Free Fire actually loads once it
-    /// has unpacked the hot-update assets into its own container.
-    var hotRoot: String? { get }
+    /// Trees Free Fire loads instead of the signed bundle:
+    /// `Library/Caches/<bundle id>` and each `Documents/contentcache/<category>`,
+    /// whose `ios/` directory mirrors the bundle's `Data/Raw/ios`.
+    var hotRoots: [String] { get }
     func exists(_ relativePath: String) throws -> Bool
     func read(_ relativePath: String) throws -> Data
     func write(_ data: Data, to relativePath: String) throws
@@ -17,7 +18,7 @@ protocol PatchFileSystem {
 
 extension PatchFileSystem {
     var bundleRoot: String? { nil }
-    var hotRoot: String? { nil }
+    var hotRoots: [String] { [] }
 
     /// The package rules are container-relative and may target either
     /// `Documents/...` (current Free Fire layout) or the bare path used by
@@ -41,13 +42,13 @@ extension PatchFileSystem {
 struct LocalPatchFileSystem: PatchFileSystem {
     let rootPath: String
     let bundleRoot: String?
-    let hotRoot: String?
+    let hotRoots: [String]
     let backendName: String
 
-    init(rootPath: String, bundleRoot: String? = nil, hotRoot: String? = nil) {
+    init(rootPath: String, bundleRoot: String? = nil, hotRoots: [String] = []) {
         self.rootPath = PatchPath.canonicalContainerPath(rootPath)
         self.bundleRoot = bundleRoot.map(PatchPath.canonicalContainerPath)
-        self.hotRoot = hotRoot.map(PatchPath.canonicalContainerPath)
+        self.hotRoots = hotRoots.map(PatchPath.canonicalContainerPath)
         self.backendName = "kernel/MCM"
     }
 
@@ -61,8 +62,19 @@ struct LocalPatchFileSystem: PatchFileSystem {
         if bundleEligible, let bundleRoot {
             urls.append(URL(fileURLWithPath: bundleRoot).appendingPathComponent(safe))
         }
-        if bundleEligible, let hotRoot {
-            urls.append(URL(fileURLWithPath: hotRoot).appendingPathComponent(safe))
+        if bundleEligible {
+            // `contentcache/<category>/ios` is the bundle's `Data/Raw/ios`, so an
+            // asset rule keeps its own tail once that prefix is replaced;
+            // `Library/Caches/<id>` appends the whole path instead.
+            let mirrored = safe.hasPrefix("Data/Raw/")
+                ? String(safe.dropFirst("Data/Raw/".count))
+                : safe
+            for hotRoot in hotRoots {
+                urls.append(URL(fileURLWithPath: hotRoot).appendingPathComponent(safe))
+                if mirrored != safe {
+                    urls.append(URL(fileURLWithPath: hotRoot).appendingPathComponent(mirrored))
+                }
+            }
         }
         if !safe.hasPrefix("Documents/") {
             urls.append(
@@ -79,7 +91,7 @@ struct LocalPatchFileSystem: PatchFileSystem {
         let path = (url.path as NSString).standardizingPath
         let insideContainer = path.hasPrefix(rootPath + "/")
         let insideBundle = bundleRoot.map { path.hasPrefix($0 + "/") } ?? false
-        let insideHot = hotRoot.map { path.hasPrefix($0 + "/") } ?? false
+        let insideHot = hotRoots.contains { path.hasPrefix($0 + "/") }
         guard insideContainer || insideBundle || insideHot else { return false }
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
@@ -103,7 +115,8 @@ struct LocalPatchFileSystem: PatchFileSystem {
     private func describe(_ safe: String) -> String {
         let parent = (safe as NSString).deletingLastPathComponent
         var notes: [String] = []
-        for base in [bundleRoot, hotRoot, rootPath + "/Documents", rootPath].compactMap({ $0 }) {
+        let bases = [bundleRoot].compactMap({ $0 }) + hotRoots + [rootPath + "/Documents", rootPath]
+        for base in bases {
             let directory = (base as NSString).appendingPathComponent(parent)
             guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory),
                   !names.isEmpty else { continue }

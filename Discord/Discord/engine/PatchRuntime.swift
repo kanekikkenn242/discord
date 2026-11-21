@@ -22,7 +22,7 @@ enum PatchRuntime {
             return try body(LocalPatchFileSystem(
                 rootPath: root,
                 bundleRoot: bundle,
-                hotRoot: hotUpdateRoot(root: root, game: game)
+                hotRoots: hotUpdateRoots(root: root, game: game)
             ))
         }
 
@@ -35,7 +35,7 @@ enum PatchRuntime {
                 return try body(LocalPatchFileSystem(
                     rootPath: root,
                     bundleRoot: bundle,
-                    hotRoot: hotUpdateRoot(root: root, game: game)
+                    hotRoots: hotUpdateRoots(root: root, game: game)
                 ))
             }
             log("patch: kernel route did not expose the container", level: .warning)
@@ -81,7 +81,7 @@ enum PatchRuntime {
                 return try body(LocalPatchFileSystem(
                     rootPath: root,
                     bundleRoot: bundle,
-                    hotRoot: hotUpdateRoot(root: root, game: game)
+                    hotRoots: hotUpdateRoots(root: root, game: game)
                 ))
             }
 
@@ -99,20 +99,38 @@ enum PatchRuntime {
         return try body(fileSystem)
     }
 
-    /// Free Fire unpacks the shipped assets into `Library/Caches/<bundle id>`
-    /// in its own container, so asset rules resolve there when the signed
-    /// bundle itself cannot be reached.
-    private static func hotUpdateRoot(root: String, game: FreeFireGame) -> String? {
-        let path = URL(fileURLWithPath: root)
+    /// Free Fire does not read the shipped `Data/Raw/ios` from the signed
+    /// bundle once it has started: the hot-update copy lives in its own
+    /// container, either under `Library/Caches/<bundle id>` or under a
+    /// `Documents/contentcache/<category>/ios` tree. Every existing one is
+    /// offered to the file system so asset rules resolve where the game reads.
+    private static func hotUpdateRoots(root: String, game: FreeFireGame) -> [String] {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        var roots: [String] = []
+
+        let caches = URL(fileURLWithPath: root)
             .appendingPathComponent("Library/Caches")
             .appendingPathComponent(game.rawValue)
-            .path
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            return nil
+        if fileManager.fileExists(atPath: caches.path, isDirectory: &isDirectory),
+           isDirectory.boolValue {
+            roots.append(caches.path)
         }
-        return path
+
+        let contentCache = URL(fileURLWithPath: root)
+            .appendingPathComponent("Documents")
+            .appendingPathComponent("contentcache")
+        let categories = (try? fileManager.contentsOfDirectory(atPath: contentCache.path)) ?? []
+        for category in categories.sorted() {
+            let base = contentCache.appendingPathComponent(category)
+            let ios = base.appendingPathComponent("ios")
+            guard fileManager.fileExists(atPath: ios.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                continue
+            }
+            roots.append(base.path)
+        }
+        return roots
     }
 
     static func accessibleLocalRoot(bundleID: String) -> String? {

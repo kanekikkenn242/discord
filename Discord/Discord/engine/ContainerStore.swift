@@ -210,8 +210,8 @@ enum ContainerStore {
         guard !didSearchAssetTree else { return }
         didSearchAssetTree = true
         let fileManager = FileManager.default
-        let needles = ["assetindexer", "gameassetbundles", "fileinfo", "com.dts.freefireth"]
-        let maxDepth = 6
+        let needles = ["assetindexer", "gameassetbundles", "fileinfo", "com.dts.freefireth", "avatar"]
+        let maxDepth = 8
         let maxDirectories = 4_000
 
         var queue: [(path: String, depth: Int)] = [(root, 0)]
@@ -219,7 +219,7 @@ enum ContainerStore {
         var files: [String] = []
         var directories: [String] = []
 
-        while !queue.isEmpty, visited < maxDirectories, files.count < 12 {
+        while !queue.isEmpty, visited < maxDirectories, files.count < 20 {
             let (path, depth) = queue.removeFirst()
             visited += 1
             guard let children = try? fileManager.contentsOfDirectory(atPath: path) else {
@@ -237,8 +237,8 @@ enum ContainerStore {
                 let lowered = child.lowercased()
                 if needles.contains(where: { lowered.contains($0) }) {
                     if isDirectory.boolValue {
-                        if directories.count < 10 { directories.append(relative) }
-                    } else if files.count < 12 {
+                        if directories.count < 16 { directories.append(relative) }
+                    } else if files.count < 20 {
                         var size: Int64 = 0
                         if let attributes = try? fileManager.attributesOfItem(atPath: full),
                            let number = attributes[.size] as? NSNumber {
@@ -258,6 +258,50 @@ enum ContainerStore {
                 + (files.isEmpty ? "none" : files.joined(separator: ", "))
                 + ", dirs: "
                 + (directories.isEmpty ? "none" : directories.joined(separator: ", ")),
+            level: .info
+        )
+        logHotUpdateLayout(root)
+    }
+
+    /// The hot-update trees the game loads, one level deeper than the asset
+    /// search so a package target can be matched exactly: whether
+    /// `ios/gameassetbundles` mirrors the bundle (`avatar/assetindexer...`) or
+    /// flattens it (`gameassetbundles.<token>`).
+    static func logHotUpdateLayout(_ root: String) {
+        let fileManager = FileManager.default
+        func names(_ path: String, limit: Int = 24) -> [String] {
+            guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else {
+                return []
+            }
+            return contents.sorted().prefix(limit).map { $0 }
+        }
+        func describe(_ relative: String) -> String? {
+            let path = URL(fileURLWithPath: root).appendingPathComponent(relative).path
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                return nil
+            }
+            let listing = names(path)
+            return "\(relative): " + (listing.isEmpty ? "<empty>" : listing.joined(separator: ", "))
+        }
+
+        let contentCache = "Documents/contentcache"
+        var notes: [String] = []
+        for category in names(URL(fileURLWithPath: root).appendingPathComponent(contentCache).path) {
+            let base = "\(contentCache)/\(category)"
+            for relative in [
+                base,
+                "\(base)/ios",
+                "\(base)/ios/gameassetbundles",
+                "\(base)/ios/gameassetbundles/avatar"
+            ] {
+                if let note = describe(relative) { notes.append(note) }
+            }
+        }
+        log(
+            "patch: hot-update layout — "
+                + (notes.isEmpty ? "nothing readable" : notes.joined(separator: " | ")),
             level: .info
         )
     }
