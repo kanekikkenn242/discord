@@ -16,6 +16,30 @@ enum AssetShift {
     static let baseResource = "asset_avatar_base"
     static let baseExtension = "raw"
 
+    /// Gzip bytes for the patched asset, so the contentcache manifest can be
+    /// repaired for both the raw and the compressed digest. The game rejects
+    /// the whole tree when either one still points at the original bytes.
+    static func gzipped(_ data: Data) -> Data? {
+        var stream = z_stream()
+        guard deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8,
+                           Z_DEFAULT_STRATEGY) == Z_OK else { return nil }
+        defer { deflateEnd(&stream) }
+        let bound = Int(compressBound(UInt(data.count))) + 64
+        var out = [UInt8](repeating: 0, count: bound)
+        let status: Int32 = data.withUnsafeBytes { raw -> Int32 in
+            guard let input = raw.baseAddress else { return Z_DATA_ERROR }
+            return out.withUnsafeMutableBytes { buf -> Int32 in
+                stream.next_in = UnsafeMutablePointer(mutating: input.assumingMemoryBound(to: UInt8.self))
+                stream.avail_in = UInt32(data.count)
+                stream.next_out = buf.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                stream.avail_out = UInt32(buf.count)
+                return deflate(&stream, Z_FINISH)
+            }
+        }
+        guard status == Z_STREAM_END else { return nil }
+        return Data(out.prefix(Int(stream.total_out)))
+    }
+
     /// Longest run that is still treated as a field edit. A float vector is a
     /// dozen bytes; a larger run means the package is not this kind of patch.
     private static let maxRun = 4_096

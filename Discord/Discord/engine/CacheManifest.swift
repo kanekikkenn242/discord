@@ -40,6 +40,7 @@ enum CacheManifest {
         current: Data,
         shipped: Data?,
         patched: Data,
+        patchedGzip: Data? = nil,
         renamedFrom: String? = nil,
         renamedTo: String? = nil,
         fileSystem: PatchFileSystem
@@ -91,6 +92,29 @@ enum CacheManifest {
                     notes.append("\(pair.name)/\(spelling.label)×\(count)")
                 }
             }
+        }
+
+        // The row also carries the SHA-1 of the gzip representation (column 5).
+        // Leaving it at the original value makes the game consider the tree
+        // corrupt and re-download it, which is why the patch appeared to apply
+        // and then vanished. Replace it with the digest of the patched bytes.
+        if let gz = patchedGzip {
+            let newGz = PatchPath.sha1Base64(gz)
+            let logical = (fileName(asset) as NSString).deletingPathExtension
+                .components(separatedBy: "~").first ?? fileName(asset)
+            var lines = updated.components(separatedBy: .newlines)
+            for (index, line) in lines.enumerated() where line.contains(logical) {
+                var fields = line.components(separatedBy: ",")
+                guard fields.count > 4 else { continue }
+                let old = fields[4].trimmingCharacters(in: .whitespaces)
+                guard old != newGz else { continue }
+                fields[4] = newGz
+                lines[index] = fields.joined(separator: ",")
+                changed = true
+                matchedCurrent = true
+                notes.append("gz/base64")
+            }
+            updated = lines.joined(separator: "\n")
         }
 
         guard matchedCurrent else {
