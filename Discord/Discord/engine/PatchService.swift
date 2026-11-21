@@ -207,12 +207,20 @@ enum PatchService {
         // Capture the exact original once per path. Existing backups are
         // never overwritten, so a second package cannot record modded bytes
         // as the original.
+        var shipped: [String: Data] = [:]
         for target in targets {
             if BackupStore.hasBackup(bundleID: bundleID, relativePath: target.relativePath) {
                 log("patch: backup already present for \(target.relativePath)", level: .trace)
+                if let existing = try? BackupStore.read(
+                    bundleID: bundleID,
+                    relativePath: target.relativePath
+                ) {
+                    shipped[target.relativePath] = existing
+                }
                 continue
             }
             let original = try fileSystem.read(target.relativePath)
+            shipped[target.relativePath] = original
             let record = try BackupStore.capture(
                 original,
                 bundleID: bundleID,
@@ -222,6 +230,34 @@ enum PatchService {
                 "patch: captured \(PatchPath.prettyBytes(record.size)) original for \(target.relativePath)",
                 level: .info
             )
+        }
+
+        // The hot-update tree is verified against the category manifest, so the
+        // asset's digest has to move with its bytes: otherwise Free Fire treats
+        // the tree as corrupt, re-downloads the hotfix and the change is gone
+        // before the game is even reachable.
+        var manifests: [CacheManifest.Replacement] = []
+        for (index, target) in targets.enumerated() where target.relativePath.contains("/contentcache/") {
+            guard let original = shipped[target.relativePath] else { continue }
+            let current = (try? fileSystem.read(target.relativePath)) ?? original
+            if let replacement = try CacheManifest.repair(
+                asset: target.relativePath,
+                current: current,
+                shipped: original,
+                patched: blobs[index],
+                fileSystem: fileSystem
+            ) {
+                manifests.append(replacement)
+            }
+        }
+        for manifest in manifests where !BackupStore.hasBackup(bundleID: bundleID, relativePath: manifest.path) {
+            let original = try fileSystem.read(manifest.path)
+            _ = try BackupStore.capture(
+                original,
+                bundleID: bundleID,
+                relativePath: manifest.path
+            )
+            log("patch: captured original for \(manifest.path)", level: .info)
         }
 
         var attempted: [String] = []
@@ -237,6 +273,16 @@ enum PatchService {
                     throw PatchServiceError.verificationFailed(target.relativePath)
                 }
                 log("patch: verified \(target.relativePath)", level: .success)
+            }
+            for manifest in manifests {
+                attempted.append(manifest.path)
+                log("patch: updating \(manifest.path) — \(manifest.summary) [\(fileSystem.backendName)]")
+                try fileSystem.write(manifest.data, to: manifest.path)
+                let readBack = try fileSystem.read(manifest.path)
+                guard readBack == manifest.data else {
+                    throw PatchServiceError.verificationFailed(manifest.path)
+                }
+                log("patch: verified \(manifest.path)", level: .success)
             }
         } catch {
             log("patch: write failed — rolling back \(attempted.count) target(s)", level: .error)
@@ -258,7 +304,7 @@ enum PatchService {
             throw error
         }
 
-        let paths = targets.map { $0.relativePath }
+        let paths = targets.map { $0.relativePath } + manifests.map { $0.path }
         AppliedTargetsStore.save(paths, productID: product.id, bundleID: bundleID)
         appendLedger(
             action: "apply",
