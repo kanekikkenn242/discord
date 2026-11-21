@@ -145,12 +145,12 @@ report true for layout testing.
 
 ## Packages
 
-The six `.3105` products are not checked in, so a fresh install shows every
-card as `Package missing` and the toggles stay disabled. Drop the packages into
-the app's `Documents/Patches/` directory (visible through Files/iTunes file
-sharing) or add them to the target as bundle resources under `Patches/`. The
-catalogue resolves `Documents/Patches` first, then `Documents`, then the bundle.
-The Game tab also has an import button for `.3105` files.
+The three avatar products are checked in under `Discord/Patches/` and ship as
+bundle resources, so their cards (`aimbot_drag`, `aimdrag_neck`, `aimneck_90`)
+are ready right after install. The three cache products are not checked in and
+will show `Package missing`; drop them into `Documents/Patches/` (Files/iTunes
+file sharing) or import them with the Game tab's import button. The catalogue
+resolves `Documents/Patches` first, then `Documents`, then the bundle.
 
 Catalogue mapping in `engine/FreeFireCatalog.swift`:
 

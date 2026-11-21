@@ -23,6 +23,11 @@ targets:
       - path: Discord
         excludes:
           - "Info.plist"
+          - "Patches"
+      # Authored .3105 packages; copied flat into the bundle so
+      # Bundle.main.url(forResource:withExtension:) finds them.
+      - path: Discord/Patches
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: Discord/Info.plist
