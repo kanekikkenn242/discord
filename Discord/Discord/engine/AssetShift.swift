@@ -41,6 +41,17 @@ enum AssetShift {
         let patchedBytes = [UInt8](patched)
         var deviceBytes = [UInt8](device)
 
+        // The hit classifier reads the serialized field name, not the float
+        // scale. Enlarging the neck alone still registers a body hit, so the
+        // neck is relabelled as the head: `bone_Neck` and `bone_Head` are both
+        // nine bytes, which keeps the serialized offsets intact. Both rigs
+        // (male/female) are relabelled.
+        let relabelled = relabelNeckAsHead(in: &deviceBytes)
+        if relabelled > 0 {
+            log("patch: relabelled \(relabelled) neck bone field(s) as head — neck hits register as headshots",
+                level: .info)
+        }
+
         let runs = changedRuns(patchedBytes, against: baseBytes)
         guard !runs.isEmpty else { return nil }
         guard runs.allSatisfy({ $0.count <= maxRun }) else {
@@ -198,6 +209,26 @@ enum AssetShift {
         return nil
     }
 
+    /// Replaces the nine-byte field name `bone_Neck` with `bone_Head` in
+    /// place. Returns how many fields were relabelled.
+    private static func relabelNeckAsHead(in asset: inout [UInt8]) -> Int {
+        let neck: [UInt8] = Array("bone_Neck".utf8)
+        let head: [UInt8] = Array("bone_Head".utf8)
+        guard neck.count == head.count else { return 0 }
+        var count = 0
+        var i = 0
+        while i + neck.count <= asset.count {
+            if Array(asset[i..<i + neck.count]) == neck {
+                for j in 0..<head.count { asset[i + j] = head[j] }
+                count += 1
+                i += neck.count
+            } else {
+                i += 1
+            }
+        }
+        return count
+    }
+
     /// All `bone_<Name>` field markers in a serialized asset: the u32 length
     /// prefix plus the name itself. Digits matter — `bone_Spine1` is one of
     /// the edited slots and must not be skipped.
@@ -247,10 +278,27 @@ enum AssetShift {
             let rank = markers.filter {
                 $0.bytes == marker.bytes && $0.range.lowerBound < marker.range.lowerBound
             }.count
-            let occurrences = allMatches(of: marker.bytes, in: device)
-            guard rank < occurrences.count else { continue }
-
-            let deviceMarker = occurrences[rank]
+            let matches = allMatches(of: marker.bytes, in: device)
+            let name = Array(marker.bytes.dropFirst(4))
+            let deviceMarker: Int
+            if name == Array("bone_Head".utf8), matches.count == 4 {
+                // A relabelled device holds four head fields: the two real
+                // heads at even indices, the two former necks at odd ones.
+                let index = rank * 2
+                guard index < matches.count else { continue }
+                deviceMarker = matches[index]
+            } else if rank < matches.count {
+                deviceMarker = matches[rank]
+            } else if name == Array("bone_Neck".utf8) {
+                // Already relabelled: the two neck fields are now head fields
+                // at odd positions in offset order (head, neck, head, neck).
+                let heads = allMatches(of: Array("bone_Head".utf8), in: device)
+                let index = rank * 2 + 1
+                guard index < heads.count else { continue }
+                deviceMarker = heads[index] - 4 // back up over the u32 length prefix
+            } else {
+                continue
+            }
             let start = deviceMarker - 12 + (run.lowerBound - triple)
             guard start >= 0, start + run.count <= device.count else { continue }
             return Placement(start: start, detail: "bone anchor \(rank)")
