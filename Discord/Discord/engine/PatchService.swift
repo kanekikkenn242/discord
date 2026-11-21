@@ -394,31 +394,27 @@ enum PatchService {
         // patched bytes right after we release them. Re-apply up to 3 times
         // if anything came back as the shipped original.
         //
-        // An asset that already carried every patched float is written back
-        // byte-for-byte, so its backup and its written bytes are identical.
-        // Comparing those two can never detect a revert — exclude such paths
-        // instead of looping and eventually reporting a missing package.
-        var noOpPaths = Set<String>()
+        // Verify the bytes we actually wrote, under the name we actually
+        // wrote them. A renamed asset no longer exists under its original
+        // name, so reading the original path reports a false "reverted" and
+        // starts a restore loop with a name that has no backup.
+        var written: [(path: String, expected: Data)] = []
         for plan in plans {
-            if let backup = try? BackupStore.read(
-                bundleID: bundleID,
-                relativePath: plan.originalPath
-            ), plan.data == backup {
-                noOpPaths.insert(plan.path)
-            }
+            written.append((plan.path, plan.data))
         }
-        let allPaths = targets.map { $0.relativePath } + manifests.map { $0.path }
+        for manifest in manifests {
+            written.append((manifest.path, manifest.data))
+        }
         var verifyAttempt = 0
         while verifyAttempt < 3 {
             verifyAttempt += 1
             var reverted: [String] = []
-            for path in allPaths where !noOpPaths.contains(path) {
-                guard let current = try? fileSystem.read(path),
-                      let backup = try? BackupStore.read(bundleID: bundleID, relativePath: path) else {
-                    reverted.append(path)
+            for item in written {
+                guard let current = try? fileSystem.read(item.path),
+                      current == item.expected else {
+                    reverted.append(item.path)
                     continue
                 }
-                if current == backup { reverted.append(path) }
             }
             guard !reverted.isEmpty else { break }
             log(
@@ -520,8 +516,19 @@ enum PatchService {
             throw PatchServiceError.packageMissing(product.packageNames.first ?? product.id)
         }
 
+        // A saved target may be the renamed name; its backup is keyed by the
+        // original name. Resolve that mapping before checking/restoring.
+        let renames = RenamedTargetsStore.load(productID: product.id, bundleID: bundleID)
+        func backupKey(for path: String) -> String {
+            if BackupStore.hasBackup(bundleID: bundleID, relativePath: path) { return path }
+            return renames.first(where: { $0.applied == path })?.original ?? path
+        }
+
         // Preflight: never restore half of a group.
-        for path in paths where !BackupStore.hasBackup(bundleID: bundleID, relativePath: path) {
+        for path in paths where !BackupStore.hasBackup(
+            bundleID: bundleID,
+            relativePath: backupKey(for: path)
+        ) {
             throw PatchServiceError.missingBackup(path)
         }
 
@@ -538,7 +545,10 @@ enum PatchService {
         var restored: [String] = []
         do {
             for path in paths {
-                let original = try BackupStore.read(bundleID: bundleID, relativePath: path)
+                let original = try BackupStore.read(
+                    bundleID: bundleID,
+                    relativePath: backupKey(for: path)
+                )
                 log("patch: restoring \(path) [\(fileSystem.backendName)]")
                 if (try? fileSystem.exists(path)) == true {
                     try fileSystem.write(original, to: path)
