@@ -210,7 +210,10 @@ enum ContainerStore {
         guard !didSearchAssetTree else { return }
         didSearchAssetTree = true
         let fileManager = FileManager.default
-        let needles = ["assetindexer", "gameassetbundles", "fileinfo", "com.dts.freefireth", "avatar"]
+        // The shipped package leaf is `assetindexer.tdn~2F53YNFWXQZyPdFl8HWBBwtXk~3D`,
+        // but the hot-update copy carries its own token, so both the logical
+        // name and the shipped token are searched for.
+        let needles = ["assetindexer", "53ynfw", "raw.tmp"]
         let maxDepth = 8
         let maxDirectories = 4_000
 
@@ -219,7 +222,7 @@ enum ContainerStore {
         var files: [String] = []
         var directories: [String] = []
 
-        while !queue.isEmpty, visited < maxDirectories, files.count < 20 {
+        while !queue.isEmpty, visited < maxDirectories {
             let (path, depth) = queue.removeFirst()
             visited += 1
             guard let children = try? fileManager.contentsOfDirectory(atPath: path) else {
@@ -275,6 +278,26 @@ enum ContainerStore {
             }
             return contents.sorted().prefix(limit).map { $0 }
         }
+        func describeSizes(_ relative: String, limit: Int = 16) -> String? {
+            let path = URL(fileURLWithPath: root).appendingPathComponent(relative).path
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
+                  isDirectory.boolValue,
+                  let contents = try? fileManager.contentsOfDirectory(atPath: path) else {
+                return nil
+            }
+            let shown = contents.sorted().prefix(limit).map { name -> String in
+                var size: Int64 = 0
+                if let attributes = try? fileManager.attributesOfItem(
+                    atPath: (path as NSString).appendingPathComponent(name)
+                ), let number = attributes[.size] as? NSNumber {
+                    size = number.int64Value
+                }
+                return "\(name) (\(size) B)"
+            }
+            return "\(relative): " + (shown.isEmpty ? "<empty>" : shown.joined(separator: ", "))
+        }
+
         func describe(_ relative: String) -> String? {
             let path = URL(fileURLWithPath: root).appendingPathComponent(relative).path
             var isDirectory: ObjCBool = false
@@ -294,10 +317,19 @@ enum ContainerStore {
                 base,
                 "\(base)/ios",
                 "\(base)/ios/gameassetbundles",
-                "\(base)/ios/gameassetbundles/avatar"
+                "\(base)/ios/gameassetbundles/avatar",
+                "\(base)/ios/gameassetbundles/avatarassets",
+                "\(base)/ios/optionalavatarres",
+                "\(base)/ios/optionalavatarres/gameassetbundles"
             ] {
                 if let note = describe(relative) { notes.append(note) }
             }
+        }
+        for relative in [
+            "\(contentCache)/Temp/ios/MultiThread/OptionalAvatarRes",
+            "Documents/ScreenShotAvatar"
+        ] {
+            if let note = describeSizes(relative) { notes.append(note) }
         }
         log(
             "patch: hot-update layout — "

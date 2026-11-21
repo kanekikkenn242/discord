@@ -126,6 +126,51 @@ struct LocalPatchFileSystem: PatchFileSystem {
         return notes.isEmpty ? "no candidate directory is readable" : notes.joined(separator: " | ")
     }
 
+    /// A hot-update bundle is stored as `<logical name>.<token>`, and the token
+    /// is minted per download, so the shipped `<name>.<ext>~2F<token>~3D` rule
+    /// can never match by name. When the exact path is absent the mirrored
+    /// directory is listed and the single file that starts with the logical
+    /// name is used; its container-relative path is returned so every later
+    /// access goes through the normal resolver.
+    func resolveExisting(_ relativePath: String) throws -> String {
+        if let exact = try? PatchFileSystem.resolveExisting(self, relativePath) {
+            return exact
+        }
+        if let discovered = discoverHotUpdateFile(try PatchPath.safeRelative(relativePath)) {
+            return discovered
+        }
+        return try PatchFileSystem.resolveExisting(self, relativePath)
+    }
+
+    private func discoverHotUpdateFile(_ safe: String) -> String? {
+        guard safe.hasPrefix("Data/Raw/") else { return nil }
+        let mirrored = String(safe.dropFirst("Data/Raw/".count))
+        let parent = (mirrored as NSString).deletingLastPathComponent
+        let file = (mirrored as NSString).lastPathComponent
+        guard !parent.isEmpty, !file.isEmpty else { return nil }
+        let logical = file.components(separatedBy: "~").first ?? file
+        let stem = (logical as NSString).deletingPathExtension
+        let prefixes = [logical, stem].filter { !$0.isEmpty && $0 != "." }
+        guard !prefixes.isEmpty else { return nil }
+        let fileManager = FileManager.default
+        for hotRoot in hotRoots {
+            let directory = URL(fileURLWithPath: hotRoot).appendingPathComponent(parent).path
+            let names = (try? fileManager.contentsOfDirectory(atPath: directory)) ?? []
+            let matches = names.filter { name in
+                prefixes.contains { name.hasPrefix($0 + ".") }
+            }
+            guard matches.count == 1, let match = matches.first else { continue }
+            let full = URL(fileURLWithPath: hotRoot)
+                .appendingPathComponent(parent)
+                .appendingPathComponent(match)
+                .path
+            guard full.hasPrefix(rootPath + "/") else { continue }
+            log("patch: \(mirrored) resolves to \(full)", level: .info)
+            return String(full.dropFirst(rootPath.count + 1))
+        }
+        return nil
+    }
+
     func exists(_ relativePath: String) throws -> Bool {
         let safe = try PatchPath.safeRelative(relativePath)
         return candidateURLs(safe).contains { isExistingFile($0) }

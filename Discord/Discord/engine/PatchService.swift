@@ -147,6 +147,21 @@ enum PatchService {
                 destination = destination.replacingOccurrences(of: "{gz}", with: cacheToken)
             }
 
+            // `.raw.tmp` is the decompressed scratch copy of an asset. The
+            // hot-update tree keeps no such file, and the gzip bundle is what
+            // the game reads, so the rule is skipped instead of failing the
+            // whole package.
+            if destination.hasSuffix(".raw.tmp") {
+                let present = (try? fileSystem.exists(destination)) ?? false
+                if !present {
+                    log(
+                        "patch: \(destination) is absent — the gzip asset carries the change",
+                        level: .info
+                    )
+                    continue
+                }
+            }
+
             let relative = try fileSystem.resolveExisting(destination)
             guard seen.insert(relative).inserted else {
                 throw PatchServiceError.invalidPackage("duplicate destination \(relative)")
