@@ -399,6 +399,15 @@ enum PatchService {
         guard let url = FreeFireCatalog.packageURL(for: product) else {
             return .packageMissing
         }
+        // A hot-update asset is not replaced with the packaged bytes: only the
+        // changed floats are shifted into the build the device already has, so
+        // a byte comparison against the package can never match after a
+        // successful apply. The recorded targets are authoritative, and they
+        // still count only while the file really differs from its backup.
+        if let applied = AppliedTargetsStore.load(productID: product.id, bundleID: bundleID),
+           appliedStillInPlace(applied, bundleID: bundleID, fileSystem: fileSystem) {
+            return .loaded
+        }
         do {
             let package = try PatchPackage.load(from: url)
             let targets = try resolvedRules(package: package, fileSystem: fileSystem)
@@ -419,6 +428,26 @@ enum PatchService {
     }
 
     // MARK: - Helpers
+
+    private static func appliedStillInPlace(
+        _ paths: [String],
+        bundleID: String,
+        fileSystem: PatchFileSystem
+    ) -> Bool {
+        guard !paths.isEmpty else { return false }
+        for path in paths {
+            guard let relative = try? PatchPath.safeRelative(path),
+                  let current = try? fileSystem.read(relative),
+                  let original = try? BackupStore.read(
+                    bundleID: bundleID,
+                    relativePath: relative
+                  ) else {
+                return false
+            }
+            if current == original { return false }
+        }
+        return true
+    }
 
     private static func rollback(
         paths: [String],

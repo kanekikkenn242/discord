@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject private var state: AppState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab: AppTab = .home
 
     var body: some View {
@@ -31,6 +32,21 @@ struct MainTabView: View {
             NoticesSheet()
         }
         .onChange(of: state.selectedGame) { _ in
+            state.refreshPatches()
+        }
+        // Pairing, the tunnel and worse_query all finish after the first probe
+        // has already reported "no backend". Re-resolving on those transitions
+        // and on returning to the app keeps the patch switches usable without
+        // a manual refresh.
+        .onChange(of: state.pairing.status) { _ in
+            state.refreshPatches()
+        }
+        .onChange(of: state.pairing.hasPairingFile) { _ in
+            state.refreshPatches()
+        }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active else { return }
+            state.pairing.refresh()
             state.refreshPatches()
         }
     }

@@ -68,7 +68,11 @@ struct PatchCard: View {
                     ))
                     .labelsHidden()
                     .tint(Theme.orange)
-                    .disabled(status == .packageMissing || status.isUnavailable)
+                    // A missing package cannot be applied, but an unreachable
+                    // container can come back: flipping the switch retries the
+                    // whole backend (tunnel, worse_query, AFC) instead of
+                    // leaving the user with a dead grey toggle.
+                    .disabled(status == .packageMissing)
                 }
             }
 
@@ -79,7 +83,8 @@ struct PatchCard: View {
                 Text(statusText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(statusColor)
-                    .lineLimit(1)
+                    .lineLimit(status.isUnavailable ? 4 : 1)
+                    .fixedSize(horizontal: false, vertical: status.isUnavailable)
             }
 
             if let noteKey = product.noteKey {

@@ -9,6 +9,7 @@ final class PatchController: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var refreshInFlight = false
+    private var retryTask: Task<Void, Never>?
 
     var isBusy: Bool { busyProductID != nil }
 
@@ -22,6 +23,18 @@ final class PatchController: ObservableObject {
 
     func refresh(game: FreeFireGame) {
         guard busyProductID == nil, !refreshInFlight else { return }
+        retryTask?.cancel()
+        retryTask = nil
+        startRefresh(game: game, attempt: 0)
+    }
+
+    /// The pairing route resolves asynchronously: the tunnel can time out on
+    /// the first probe and answer a few seconds later, and the cached
+    /// worse_query container only appears after that. A single failed probe
+    /// must not leave every switch disabled until the user taps refresh, so
+    /// the whole-backend failure is retried a bounded number of times.
+    private func startRefresh(game: FreeFireGame, attempt: Int) {
+        guard busyProductID == nil, !refreshInFlight else { return }
         refreshInFlight = true
 
         let products = FreeFireCatalog.products
@@ -32,6 +45,7 @@ final class PatchController: ObservableObject {
             }
 
             var backendName = PatchRuntime.backendDescription(game: game)
+            var backendFailed = false
 
             do {
                 let outcome = try PatchRuntime.withFileSystem(game: game, allowKernel: false) { fileSystem -> ([String: PatchProductStatus], String) in
@@ -50,6 +64,7 @@ final class PatchController: ObservableObject {
             } catch {
                 let message = Self.short(error)
                 let full = Self.full(error)
+                backendFailed = true
                 for product in products where FreeFireCatalog.hasPackage(for: product) {
                     resolved[product.id] = .unavailable(message)
                 }
@@ -62,6 +77,14 @@ final class PatchController: ObservableObject {
                 self.refreshInFlight = false
                 self.statuses = finalStatuses
                 self.backend = finalBackend
+                guard backendFailed, attempt < 2 else { return }
+                self.retryTask?.cancel()
+                self.retryTask = Task { @MainActor [weak self] in
+                    let delay: UInt64 = attempt == 0 ? 4_000_000_000 : 15_000_000_000
+                    try? await Task.sleep(nanoseconds: delay)
+                    guard !Task.isCancelled, let self else { return }
+                    self.startRefresh(game: game, attempt: attempt + 1)
+                }
             }
         }
     }
@@ -74,6 +97,8 @@ final class PatchController: ObservableObject {
     ) {
         guard busyProductID == nil else { return }
 
+        retryTask?.cancel()
+        retryTask = nil
         busyProductID = product.id
         lastError = nil
 
