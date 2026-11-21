@@ -488,9 +488,13 @@ enum PatchService {
 
         // cache_res carries the hit colliders. The avatar index cannot change
         // HEAD vs TORSO, so relocate the helper type fields by their serialized
-        // marker instead of by absolute offset.
+        // marker instead of by absolute offset. The comparison blob must be the
+        // raw asset, not the gzip variant (which has no readable fields).
+        let colliderReference = package.files["cache_res_raw.bin"]
+            ?? package.files.first(where: { $0.key.hasSuffix("_raw.bin") })?.value
+            ?? raw
         if target.relativePath.contains("/cache_res"),
-           let shifted = ColliderShift.makeAllHead(in: device, reference: raw) {
+           let shifted = ColliderShift.makeAllHead(in: device, reference: colliderReference) {
             log("patch: \(target.relativePath) — relabelled \(shifted.1) hit collider(s) as HEAD",
                 level: .info)
             return shifted.0

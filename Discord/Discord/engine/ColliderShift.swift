@@ -36,10 +36,11 @@ enum ColliderShift {
     /// the package do not expose the same helper layout.
     static func makeAllHead(in device: Data, reference: Data) -> (Data, Int)? {
         let deviceFields = fields(in: device)
-        let referenceFields = fields(in: reference)
-        guard !deviceFields.isEmpty, deviceFields.count == referenceFields.count else {
-            return nil
-        }
+        // A different game build can carry a different number of helpers.
+        // The serialized marker is stable, so patch every helper present on
+        // the device rather than demanding an exact count match.
+        guard !deviceFields.isEmpty else { return nil }
+        _ = reference
 
         var out = [UInt8](device)
         var changed = 0
