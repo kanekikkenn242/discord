@@ -58,6 +58,7 @@ enum AssetShift {
 
         var placements: [String] = []
         var written = 0
+        var alreadyApplied = 0
 
         for run in runs {
             guard let start = locate(run, in: deviceBytes, base: baseBytes) else {
@@ -73,6 +74,14 @@ enum AssetShift {
                     level: .warning
                 )
                 return nil
+            }
+            // A newer game asset can already contain a value from the patch.
+            // Accept that run only when every byte exactly matches the package;
+            // any other divergence remains an incompatible-build failure.
+            if deviceBytes[start..<start + run.count].elementsEqual(patchedBytes[run]) {
+                alreadyApplied += run.count
+                placements.append("\(run.lowerBound)->\(start) (already applied)")
+                continue
             }
             for offset in 0..<run.count {
                 let target = start + offset
@@ -93,9 +102,9 @@ enum AssetShift {
             placements.append("\(run.lowerBound)->\(start)")
         }
 
-        guard written > 0 else { return nil }
+        guard written > 0 || alreadyApplied > 0 else { return nil }
         log(
-            "patch: shifted \(written) byte(s) into the device asset"
+            "patch: shifted \(written) byte(s), already present \(alreadyApplied) byte(s)"
                 + " (\(placements.count) slot(s): \(placements.joined(separator: ", ")))",
             level: .info
         )
