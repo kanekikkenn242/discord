@@ -180,6 +180,9 @@ enum PatchService {
         fileSystem: PatchFileSystem
     ) throws -> PatchApplyResult {
         let targets = try resolvedRules(package: package, fileSystem: fileSystem)
+        let blobs = try targets.map {
+            try blob(for: $0, package: package, fileSystem: fileSystem)
+        }
 
         // Preflight: every source blob must match its digest and every target
         // must already exist. Nothing is written before all checks pass.
@@ -223,16 +226,14 @@ enum PatchService {
 
         var attempted: [String] = []
         do {
-            for target in targets {
-                guard let source = package.files[target.rule.source] else {
-                    throw PatchServiceError.invalidPackage("missing source \(target.rule.source)")
-                }
+            for (index, target) in targets.enumerated() {
+                let blob = blobs[index]
                 attempted.append(target.relativePath)
                 log("patch: writing \(target.rule.source) -> \(target.relativePath) [\(fileSystem.backendName)]")
-                try fileSystem.write(source, to: target.relativePath)
+                try fileSystem.write(blob, to: target.relativePath)
 
                 let readBack = try fileSystem.read(target.relativePath)
-                guard readBack == source else {
+                guard readBack == blob else {
                     throw PatchServiceError.verificationFailed(target.relativePath)
                 }
                 log("patch: verified \(target.relativePath)", level: .success)
@@ -275,6 +276,49 @@ enum PatchService {
             bundleID: bundleID,
             backend: fileSystem.backendName,
             paths: paths
+        )
+    }
+
+    /// The blob to write for one resolved target. The hot-update trees store an
+    /// asset as one raw file, while a package ships a gzip blob for the signed
+    /// build and the raw one for the scratch copy, so the raw blob is used
+    /// there. Because that file belongs to a newer build than the package was
+    /// made from, its own bytes are kept and only the changed floats are
+    /// shifted in; the packaged blob is written whole only when the file is
+    /// byte-identical to the shipped base.
+    private static func blob(
+        for target: (rule: PatchRule, relativePath: String),
+        package: PatchPackage,
+        fileSystem: PatchFileSystem
+    ) throws -> Data {
+        guard let source = package.files[target.rule.source] else {
+            throw PatchServiceError.invalidPackage("missing source \(target.rule.source)")
+        }
+        guard target.relativePath.contains("/contentcache/") else {
+            return source
+        }
+
+        let rawName = (target.rule.source as NSString).deletingPathExtension + ".raw"
+        guard let raw = package.files[rawName] ?? package.files[target.rule.source],
+              raw.count != 0,
+              let device = try? fileSystem.read(target.relativePath) else {
+            return source
+        }
+        guard let base = AssetShift.baseData() else {
+            log(
+                "patch: shipped avatar base is missing — writing \(target.rule.source) as is",
+                level: .warning
+            )
+            return source
+        }
+        if device == base || device == raw {
+            return raw
+        }
+        if let shifted = AssetShift.apply(patched: raw, to: device, base: base) {
+            return shifted
+        }
+        throw PatchServiceError.invalidPackage(
+            "\(target.relativePath) is a different build of the asset and its float slots could not be located"
         )
     }
 

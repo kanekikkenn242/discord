@@ -170,11 +170,13 @@ def main():
         outputs[name] = (display, files, avatar_rules, raw)
 
     raw = raw_with_floats(base, AIMNECK_90_FLOATS["offsets"], AIMNECK_90_FLOATS["value"])
-    files = {"mod_asset.tdn": gz(raw)}
+    # The raw blob is part of every package: the hot-update tree stores the
+    # asset uncompressed, so the engine needs the raw form to patch it in place.
+    files = {"mod_asset.tdn": gz(raw), "mod_asset.raw": raw}
     outputs["aimneck_90"] = (
         AIMNECK_90_FLOATS["name"],
         files,
-        [("mod_asset.tdn", LEAF)],
+        avatar_rules,
         raw,
     )
 
