@@ -25,6 +25,7 @@ jobs:
       - name: Build IPA (unsigned)
         working-directory: Discord
         run: |
+          set +e
           mkdir -p ../build
           xcodebuild \
             -project Discord.xcodeproj \
@@ -39,11 +40,19 @@ jobs:
           status=$?
           if [ $status -ne 0 ]; then
             # The job log needs repository admin rights to download, so the
-            # compiler errors are re-emitted as annotations: those are readable
-            # from the public check run, which is where a failure gets looked at.
-            grep -E "error:|fatal error:" ../build/xcodebuild.log | head -40 | while IFS= read -r line; do
+            # compiler errors go to the check annotations and the step summary:
+            # both are readable from the public run page.
+            grep -aE "error:|fatal error:" ../build/xcodebuild.log > ../build/errors.txt
+            head -40 ../build/errors.txt | while IFS= read -r line; do
               echo "::error::$line"
             done
+            {
+              echo "### xcodebuild failed with exit code $status"
+              echo '```'
+              head -80 ../build/errors.txt
+              tail -120 ../build/xcodebuild.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
             tail -60 ../build/xcodebuild.log
           fi
           exit $status
