@@ -373,11 +373,20 @@ final class PairingController: ObservableObject {
 
         // Publishing is only possible once Local Network is granted, and a
         // refused permission is invisible in the Developer Mode list. Ask for
-        // it first, then bind the host.
+        // it first, then bind the host. A denied probe means NetService would
+        // fail with -72000, so surface it instead of launching into a failure.
         localNetwork.request { [weak self] authorized in
             guard let self, self.runGeneration == generation else { return }
             guard self.isRunning else { return }
             log("pairing: local network probe finished (authorized=\(authorized))", level: .info)
+            guard authorized else {
+                let detail = "Local Network access is off. Enable it in Settings › Apps › Discord › Local Network, then start pairing again."
+                self.status = .failed(detail)
+                self.errorMessage = detail
+                self.keepAlive.cancel()
+                log("pairing: \(detail)", level: .error)
+                return
+            }
             self.keepAlive.begin()
             self.launchHost(generation: generation)
         }

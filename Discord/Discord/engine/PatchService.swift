@@ -386,6 +386,31 @@ enum PatchService {
             throw error
         }
 
+        // Post-write verification: Free Fire (or the system) can overwrite
+        // patched bytes right after we release them. Re-apply up to 3 times
+        // if anything came back as the shipped original.
+        let allPaths = targets.map { $0.relativePath } + manifests.map { $0.path }
+        var verifyAttempt = 0
+        while verifyAttempt < 3 {
+            verifyAttempt += 1
+            var reverted: [String] = []
+            for path in allPaths {
+                guard let current = try? fileSystem.read(path),
+                      let backup = try? BackupStore.read(bundleID: bundleID, relativePath: path) else {
+                    reverted.append(path)
+                    continue
+                }
+                if current == backup { reverted.append(path) }
+            }
+            guard !reverted.isEmpty else { break }
+            log(
+                "patch: \(product.packageNames.first ?? product.id) — \(reverted.count) file(s) reverted by the game, re-applying (\(verifyAttempt)/3)",
+                level: .warning
+            )
+            try restore(product: product, bundleID: bundleID, package: nil, fileSystem: fileSystem)
+            return try apply(package: package, product: product, bundleID: bundleID, fileSystem: fileSystem)
+        }
+
         RenamedTargetsStore.save(
             attempted.filter(\.renamed).map {
                 RenamedTarget(original: $0.originalPath, applied: $0.appliedPath)
@@ -569,6 +594,7 @@ enum PatchService {
                 level: inPlace ? .success : .warning
             )
             if inPlace { return .loaded }
+            return .partial
         }
         do {
             let package = try PatchPackage.load(from: url)
