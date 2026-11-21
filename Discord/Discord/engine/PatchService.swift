@@ -372,11 +372,19 @@ enum PatchService {
                 // it made the game download the clean copy back over the
                 // patch. The manifest now points at this copy, so the shipped
                 // bytes left on disk are never read.
-                let note = plan.renamedTo == nil
-                    ? ""
-                    : " (copy; original \((plan.originalPath as NSString).lastPathComponent) kept)"
+                let isCopy = plan.renamedTo != nil
+                let note = isCopy
+                    ? " (copy; original \((plan.originalPath as NSString).lastPathComponent) kept)"
+                    : ""
                 log("patch: writing \(plan.label) -> \(plan.path)\(note) [\(fileSystem.backendName)]")
-                try fileSystem.write(plan.data, to: plan.path)
+                if isCopy {
+                    // A copy does not exist yet; `write` resolves through the
+                    // discovery map and refuses a missing target. `create` is
+                    // the API that writes a new file beside the shipped one.
+                    try fileSystem.create(plan.data, at: plan.path)
+                } else {
+                    try fileSystem.write(plan.data, to: plan.path)
+                }
 
                 let readBack = try fileSystem.read(applied.appliedPath)
                 guard readBack == plan.data else {

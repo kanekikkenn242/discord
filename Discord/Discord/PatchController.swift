@@ -10,6 +10,27 @@ final class PatchController: ObservableObject {
 
     private var refreshInFlight = false
     private var retryTask: Task<Void, Never>?
+    private var autoRefreshTimer: Timer?
+
+    /// Free Fire rewrites its hot-update manifest and re-downloads the shipped
+    /// asset on every launch. The status pass below re-applies a `.partial`
+    /// patch, but it only runs when Discord becomes active — too late for a
+    /// match already in progress. The pairing service keeps this app alive in
+    /// the background (background audio keep-alive), so a short repeating
+    /// refresh puts the patch back within seconds of the game undoing it.
+    private func startAutoRefresh(game: FreeFireGame) {
+        guard autoRefreshTimer == nil else { return }
+        autoRefreshTimer = Timer.scheduledTimer(
+            withTimeInterval: 3,
+            repeats: true
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                guard self.statuses.values.contains(where: { $0.isLoaded }) else { return }
+                self.refresh(game: game)
+            }
+        }
+    }
 
     var isBusy: Bool { busyProductID != nil }
 
@@ -202,6 +223,9 @@ final class PatchController: ObservableObject {
                         for other in conflicting where self.statuses[other.id]?.isLoaded == true {
                             self.statuses[other.id] = .notLoaded
                         }
+                    }
+                    if enabled {
+                        self.startAutoRefresh(game: game)
                     }
                     SoundPlayer.shared.playEffect(enabled ? "activar" : "desactivar")
                 }

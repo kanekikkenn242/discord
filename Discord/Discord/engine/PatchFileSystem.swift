@@ -338,6 +338,10 @@ final class AirliftPatchFileSystem: PatchFileSystem {
         try tunnel.writeFile(path: safe, data: data)
     }
 
+    func create(_ data: Data, at relativePath: String) throws {
+        try write(data, to: relativePath)
+    }
+
     func delete(_ relativePath: String) throws {
         let safe = try PatchPath.safeRelative(relativePath)
         try tunnel.removeFile(path: safe)
