@@ -13,12 +13,17 @@ enum PatchRuntime {
         if let root = accessibleLocalRoot(bundleID: game.rawValue) {
             let bundle = ContainerStore.resolveApplicationBundlePath(bundleID: game.rawValue)
             ContainerStore.logDataContainerLayout(root)
+            ContainerStore.logAssetTreeSearch(root)
             log(
                 "patch: backend = local container \(root)"
                     + (bundle.map { " + bundle \($0)" } ?? ""),
                 level: .info
             )
-            return try body(LocalPatchFileSystem(rootPath: root, bundleRoot: bundle))
+            return try body(LocalPatchFileSystem(
+                rootPath: root,
+                bundleRoot: bundle,
+                hotRoot: hotUpdateRoot(root: root, game: game)
+            ))
         }
 
         if allowKernel, shouldTryKernel {
@@ -27,7 +32,11 @@ enum PatchRuntime {
             if started, let root = accessibleLocalRoot(bundleID: game.rawValue) {
                 let bundle = ContainerStore.resolveApplicationBundlePath(bundleID: game.rawValue)
                 log("patch: backend = kernel/MCM after exploit", level: .success)
-                return try body(LocalPatchFileSystem(rootPath: root, bundleRoot: bundle))
+                return try body(LocalPatchFileSystem(
+                    rootPath: root,
+                    bundleRoot: bundle,
+                    hotRoot: hotUpdateRoot(root: root, game: game)
+                ))
             }
             log("patch: kernel route did not expose the container", level: .warning)
         }
@@ -69,7 +78,11 @@ enum PatchRuntime {
                     "patch: backend = worse_query at \(root) after the pairing probe",
                     level: .success
                 )
-                return try body(LocalPatchFileSystem(rootPath: root, bundleRoot: bundle))
+                return try body(LocalPatchFileSystem(
+                    rootPath: root,
+                    bundleRoot: bundle,
+                    hotRoot: hotUpdateRoot(root: root, game: game)
+                ))
             }
 
             throw PatchServiceError.noAccess(
@@ -84,6 +97,21 @@ enum PatchRuntime {
 
         let fileSystem = AirliftPatchFileSystem(tunnel: tunnel)
         return try body(fileSystem)
+    }
+
+    /// Free Fire unpacks the shipped assets into `Library/Caches/<bundle id>`
+    /// in its own container, so asset rules resolve there when the signed
+    /// bundle itself cannot be reached.
+    private static func hotUpdateRoot(root: String, game: FreeFireGame) -> String? {
+        let path = (root as NSString)
+            .appendingPathComponent("Library/Caches")
+            .appendingPathComponent(game.rawValue)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return nil
+        }
+        return path
     }
 
     static func accessibleLocalRoot(bundleID: String) -> String? {

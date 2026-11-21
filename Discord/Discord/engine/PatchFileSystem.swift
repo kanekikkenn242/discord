@@ -6,6 +6,9 @@ protocol PatchFileSystem {
     /// Free Fire keeps `Data/Raw/ios/gameassetbundles` inside the signed
     /// bundle, not in the data container, so asset rules only resolve there.
     var bundleRoot: String? { get }
+    /// `Library/Caches/<bundle id>`: the tree Free Fire actually loads once it
+    /// has unpacked the hot-update assets into its own container.
+    var hotRoot: String? { get }
     func exists(_ relativePath: String) throws -> Bool
     func read(_ relativePath: String) throws -> Data
     func write(_ data: Data, to relativePath: String) throws
@@ -14,6 +17,7 @@ protocol PatchFileSystem {
 
 extension PatchFileSystem {
     var bundleRoot: String? { nil }
+    var hotRoot: String? { nil }
 
     /// The package rules are container-relative and may target either
     /// `Documents/...` (current Free Fire layout) or the bare path used by
@@ -37,11 +41,13 @@ extension PatchFileSystem {
 struct LocalPatchFileSystem: PatchFileSystem {
     let rootPath: String
     let bundleRoot: String?
+    let hotRoot: String?
     let backendName: String
 
-    init(rootPath: String, bundleRoot: String? = nil) {
+    init(rootPath: String, bundleRoot: String? = nil, hotRoot: String? = nil) {
         self.rootPath = PatchPath.canonicalContainerPath(rootPath)
         self.bundleRoot = bundleRoot.map(PatchPath.canonicalContainerPath)
+        self.hotRoot = hotRoot.map(PatchPath.canonicalContainerPath)
         self.backendName = "kernel/MCM"
     }
 
@@ -54,6 +60,9 @@ struct LocalPatchFileSystem: PatchFileSystem {
         let bundleEligible = !Self.containerOnlyPrefixes.contains { safe.hasPrefix($0) }
         if bundleEligible, let bundleRoot {
             urls.append(URL(fileURLWithPath: bundleRoot).appendingPathComponent(safe))
+        }
+        if bundleEligible, let hotRoot {
+            urls.append(URL(fileURLWithPath: hotRoot).appendingPathComponent(safe))
         }
         if !safe.hasPrefix("Documents/") {
             urls.append(
@@ -70,7 +79,8 @@ struct LocalPatchFileSystem: PatchFileSystem {
         let path = (url.path as NSString).standardizingPath
         let insideContainer = path.hasPrefix(rootPath + "/")
         let insideBundle = bundleRoot.map { path.hasPrefix($0 + "/") } ?? false
-        guard insideContainer || insideBundle else { return false }
+        let insideHot = hotRoot.map { path.hasPrefix($0 + "/") } ?? false
+        guard insideContainer || insideBundle || insideHot else { return false }
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
             && !isDirectory.boolValue
@@ -93,7 +103,7 @@ struct LocalPatchFileSystem: PatchFileSystem {
     private func describe(_ safe: String) -> String {
         let parent = (safe as NSString).deletingLastPathComponent
         var notes: [String] = []
-        for base in [bundleRoot, rootPath + "/Documents", rootPath].compactMap({ $0 }) {
+        for base in [bundleRoot, hotRoot, rootPath + "/Documents", rootPath].compactMap({ $0 }) {
             let directory = (base as NSString).appendingPathComponent(parent)
             guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory),
                   !names.isEmpty else { continue }

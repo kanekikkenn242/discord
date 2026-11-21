@@ -200,6 +200,68 @@ enum ContainerStore {
         )
     }
 
+    /// Free Fire keeps no `Documents/Data`, but it does write the hot-update
+    /// tree it loads at runtime inside its own container (`Library/Caches`,
+    /// `Documents/contentcache`). Only a bounded walk can name the file the
+    /// package has to land on, so the walk reports it with its size.
+    private static var didSearchAssetTree = false
+
+    static func logAssetTreeSearch(_ root: String) {
+        guard !didSearchAssetTree else { return }
+        didSearchAssetTree = true
+        let fileManager = FileManager.default
+        let needles = ["assetindexer", "gameassetbundles", "fileinfo", "com.dts.freefireth"]
+        let maxDepth = 6
+        let maxDirectories = 4_000
+
+        var queue: [(path: String, depth: Int)] = [(root, 0)]
+        var visited = 0
+        var files: [String] = []
+        var directories: [String] = []
+
+        while !queue.isEmpty, visited < maxDirectories, files.count < 12 {
+            let (path, depth) = queue.removeFirst()
+            visited += 1
+            guard let children = try? fileManager.contentsOfDirectory(atPath: path) else {
+                continue
+            }
+            for child in children {
+                let full = (path as NSString).appendingPathComponent(child)
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: full, isDirectory: &isDirectory) else {
+                    continue
+                }
+                let relative = full.count > root.count + 1
+                    ? String(full.dropFirst(root.count + 1))
+                    : child
+                let lowered = child.lowercased()
+                if needles.contains(where: { lowered.contains($0) }) {
+                    if isDirectory.boolValue {
+                        if directories.count < 10 { directories.append(relative) }
+                    } else if files.count < 12 {
+                        var size: Int64 = 0
+                        if let attributes = try? fileManager.attributesOfItem(atPath: full),
+                           let number = attributes[.size] as? NSNumber {
+                            size = number.int64Value
+                        }
+                        files.append("\(relative) (\(size) B)")
+                    }
+                }
+                if isDirectory.boolValue, depth < maxDepth {
+                    queue.append((full, depth + 1))
+                }
+            }
+        }
+
+        log(
+            "patch: asset tree search — \(visited) dirs, files: "
+                + (files.isEmpty ? "none" : files.joined(separator: ", "))
+                + ", dirs: "
+                + (directories.isEmpty ? "none" : directories.joined(separator: ", ")),
+            level: .info
+        )
+    }
+
     private static func rememberBundle(_ path: String, bundleID: String) {
         UserDefaults.standard.set(path, forKey: bundleCachePrefix + bundleID)
         log("patch: app bundle resolved at \(path)")
