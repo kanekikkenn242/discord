@@ -331,6 +331,45 @@ enum ContainerStore {
         ] {
             if let note = describeSizes(relative) { notes.append(note) }
         }
+
+        // The avatar directory decides whether the patched asset is the one the
+        // game reads. Sizes, headers and a gzip member's declared length are
+        // enough to tell a stored asset from a compressed copy of it.
+        func describeAvatarFiles(_ relative: String) -> String? {
+            let path = URL(fileURLWithPath: root).appendingPathComponent(relative).path
+            guard let contents = try? fileManager.contentsOfDirectory(atPath: path),
+                  !contents.isEmpty else { return nil }
+            let shown = contents.sorted().map { name -> String in
+                let full = (path as NSString).appendingPathComponent(name)
+                var size: Int64 = 0
+                if let attributes = try? fileManager.attributesOfItem(atPath: full),
+                   let number = attributes[.size] as? NSNumber {
+                    size = number.int64Value
+                }
+                var note = "\(name) (\(size) B)"
+                if let handle = FileHandle(forReadingAtPath: full) {
+                    let head = handle.readData(ofLength: 4)
+                    let whole = size <= 8_000_000 ? handle.readDataToEndOfFile() : Data()
+                    try? handle.close()
+                    if head.count == 4 {
+                        note += " [\(head.map { String(format: "%02x", $0) }.joined())]"
+                        if head[0] == 0x1f, head[1] == 0x8b, whole.count >= 18 {
+                            let tail = whole.suffix(4)
+                            let inflated = tail.reversed().reduce(0) { $0 << 8 | Int($1) }
+                            note += " gzip, inflated \(inflated) B"
+                        }
+                    }
+                }
+                return note
+            }
+            return "\(relative) details: " + shown.joined(separator: ", ")
+        }
+        if let note = describeAvatarFiles("\(contentCache)/Compulsory/ios/gameassetbundles/avatar") {
+            notes.append(note)
+        }
+        if let note = describeSizes("\(contentCache)/Compulsory/ios", limit: 4) {
+            notes.append(note)
+        }
         log(
             "patch: hot-update layout — "
                 + (notes.isEmpty ? "nothing readable" : notes.joined(separator: " | ")),

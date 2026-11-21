@@ -200,7 +200,20 @@ struct LocalPatchFileSystem: PatchFileSystem {
             let matches = names.filter { name in
                 prefixes.contains { name.hasPrefix($0 + ".") }
             }
-            guard matches.count == 1, let match = matches.first else { continue }
+            guard !matches.isEmpty else { continue }
+            // Free Fire writes its own copy back under the shipped digest, so a
+            // tree can hold both that copy and the one this app renamed. The
+            // newest file is the one the game last wrote or accepted, and it is
+            // the build the floats have to be shifted into.
+            let match = matches.max { lhs, rhs in
+                modificationDate(directory, lhs) < modificationDate(directory, rhs)
+            } ?? matches[0]
+            if matches.count > 1 {
+                log(
+                    "patch: \(parent) holds \(matches.count) copies for \(logical) — using the newest, \(match)",
+                    level: .info
+                )
+            }
             let full = URL(fileURLWithPath: hotRoot)
                 .appendingPathComponent(parent)
                 .appendingPathComponent(match)
@@ -210,6 +223,12 @@ struct LocalPatchFileSystem: PatchFileSystem {
             return String(full.dropFirst(rootPath.count + 1))
         }
         return nil
+    }
+
+    private func modificationDate(_ directory: String, _ name: String) -> Date {
+        let path = (directory as NSString).appendingPathComponent(name)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        return (attributes?[.modificationDate] as? Date) ?? .distantPast
     }
 
     func exists(_ relativePath: String) throws -> Bool {
