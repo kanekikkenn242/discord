@@ -14,6 +14,10 @@ protocol PatchFileSystem {
     func read(_ relativePath: String) throws -> Data
     func write(_ data: Data, to relativePath: String) throws
     func delete(_ relativePath: String) throws
+    /// Declared as a requirement on purpose: with only an extension method,
+    /// calls through the `PatchFileSystem` existential dispatch statically and
+    /// `LocalPatchFileSystem`'s hot-update discovery is never reached.
+    func resolveExisting(_ relativePath: String) throws -> String
 }
 
 extension PatchFileSystem {
@@ -35,6 +39,7 @@ extension PatchFileSystem {
                 return candidate
             }
         }
+        log("patch: \(safe) is not on this device [\(backendName)]", level: .warning)
         throw PatchServiceError.targetMissing(safe)
     }
 }
