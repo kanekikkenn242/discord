@@ -203,9 +203,17 @@ struct LocalPatchFileSystem: PatchFileSystem {
             guard !matches.isEmpty else { continue }
             // Free Fire writes its own copy back under the shipped digest, so a
             // tree can hold both that copy and the one this app renamed. The
-            // newest file is the one the game last wrote or accepted, and it is
-            // the build the floats have to be shifted into.
-            let match = matches.max { lhs, rhs in
+            // manifest records the digest of the copy the game actually loads;
+            // prefer that one over the newest mtime, otherwise a stale copy can
+            // be patched while the game keeps reading the manifest's choice.
+            let manifestURL = URL(fileURLWithPath: hotRoot)
+                .appendingPathComponent("ios")
+                .appendingPathComponent("fileinfo")
+            let recorded = Self.manifestToken(in: manifestURL.path, for: logical)
+            let preferred = recorded.flatMap { token in
+                matches.first { $0.contains(token) }
+            }
+            let match = preferred ?? matches.max { lhs, rhs in
                 modificationDate(directory, lhs) < modificationDate(directory, rhs)
             } ?? matches[0]
             if matches.count > 1 {
@@ -221,6 +229,23 @@ struct LocalPatchFileSystem: PatchFileSystem {
             guard full.hasPrefix(rootPath + "/") else { continue }
             log("patch: \(mirrored) resolves to \(full)", level: .info)
             return String(full.dropFirst(rootPath.count + 1))
+        }
+        return nil
+    }
+
+    /// The URL-escaped Base64 SHA-1 that `fileinfo` records for `logical`,
+    /// i.e. the digest of the copy Free Fire will load. The row format is not
+    /// parsed by column; a 28-character Base64 token on the row is enough.
+    private static func manifestToken(in path: String, for logical: String) -> String? {
+        guard let text = (try? String(contentsOfFile: path, encoding: .utf8))
+                ?? (try? String(contentsOfFile: path, encoding: .isoLatin1)) else { return nil }
+        for line in text.components(separatedBy: .newlines) where line.contains(logical) {
+            for field in line.components(separatedBy: ",") {
+                let value = field.trimmingCharacters(in: .whitespaces)
+                if value.count == 28, value.hasSuffix("="), value.range(of: "[^A-Za-z0-9+/=]", options: .regularExpression) == nil {
+                    return PatchPath.escapeBase64Token(value)
+                }
+            }
         }
         return nil
     }
