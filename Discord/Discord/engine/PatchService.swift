@@ -197,6 +197,19 @@ enum PatchService {
         bundleID: String,
         fileSystem: PatchFileSystem
     ) throws -> PatchApplyResult {
+        // A patched asset sits under the digest of its own bytes, so applying
+        // again would extend an already patched build instead of the shipped
+        // one. Put the original back first: the shift always starts from the
+        // build the game shipped.
+        if let saved = AppliedTargetsStore.load(productID: product.id, bundleID: bundleID),
+           !saved.isEmpty {
+            log(
+                "patch: \(product.packageNames.first ?? product.id) is already applied — restoring the shipped build before writing again",
+                level: .info
+            )
+            try restore(product: product, bundleID: bundleID, package: nil, fileSystem: fileSystem)
+        }
+
         let targets = try resolvedRules(package: package, fileSystem: fileSystem)
         let blobs = try targets.map {
             try blob(for: $0, package: package, fileSystem: fileSystem)

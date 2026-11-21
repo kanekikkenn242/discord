@@ -179,7 +179,22 @@ struct LocalPatchFileSystem: PatchFileSystem {
         let prefixes = [logical, stem].filter { !$0.isEmpty && $0 != "." }
         guard !prefixes.isEmpty else { return nil }
         let fileManager = FileManager.default
-        for hotRoot in hotRoots {
+
+        // A patched asset is stored under the digest of its own bytes, so the
+        // shipped token is gone and the file has to be found by name. The
+        // container's own `Documents/contentcache/...` tree is searched too:
+        // that is where the asset lives, and it is the only root that can be
+        // rewritten in place.
+        var roots = hotRoots
+        let cacheBase = rootPath + "/Documents/contentcache"
+        if let categories = try? fileManager.contentsOfDirectory(atPath: cacheBase) {
+            for category in categories.sorted() {
+                roots.append(cacheBase + "/" + category)
+            }
+        }
+        roots.append(rootPath)
+
+        for hotRoot in roots {
             let directory = URL(fileURLWithPath: hotRoot).appendingPathComponent(parent).path
             let names = (try? fileManager.contentsOfDirectory(atPath: directory)) ?? []
             let matches = names.filter { name in
