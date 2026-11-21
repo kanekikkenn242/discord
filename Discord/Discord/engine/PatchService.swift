@@ -300,7 +300,7 @@ enum PatchService {
                     plan.path = directory + "/" + newName
                     plan.renamedTo = newName
                     log(
-                        "patch: \(fileName) is named after its own content — the patched asset is stored as \(newName)",
+                        "patch: \(fileName) is named after its own content — the patched asset is stored as \(newName), original kept",
                         level: .info
                     )
                 } else {
@@ -344,21 +344,16 @@ enum PatchService {
                     renamed: plan.renamedTo != nil
                 )
                 attempted.append(applied)
-                if let newName = plan.renamedTo {
-                    log(
-                        "patch: writing \(plan.label) -> \(plan.path) (renamed from \((plan.originalPath as NSString).lastPathComponent)) [\(fileSystem.backendName)]"
-                    )
-                    let written = try fileSystem.replaceWithNewName(
-                        newName,
-                        data: plan.data,
-                        at: plan.originalPath
-                    )
-                    applied.appliedPath = written
-                    attempted[attempted.count - 1] = applied
-                } else {
-                    log("patch: writing \(plan.label) -> \(plan.path) [\(fileSystem.backendName)]")
-                    try fileSystem.write(plan.data, to: plan.path)
-                }
+                // Keep the shipped file in place. Free Fire looks up the
+                // original content-addressed name on every launch; deleting
+                // it made the game download the clean copy back over the
+                // patch. The manifest now points at this copy, so the shipped
+                // bytes left on disk are never read.
+                let note = plan.renamedTo == nil
+                    ? ""
+                    : " (copy; original \((plan.originalPath as NSString).lastPathComponent) kept)"
+                log("patch: writing \(plan.label) -> \(plan.path)\(note) [\(fileSystem.backendName)]")
+                try fileSystem.write(plan.data, to: plan.path)
 
                 let readBack = try fileSystem.read(applied.appliedPath)
                 guard readBack == plan.data else {
