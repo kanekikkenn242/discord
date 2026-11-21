@@ -315,7 +315,7 @@ enum PatchService {
                     shipped: original,
                     patched: blob,
                     patchedGzip: target.relativePath.contains("/cache_res")
-                        ? blob : package.files[target.rule.source],
+                        ? blob : (GzipData.compress(blob) ?? package.files[target.rule.source]),
                     renamedFrom: plan.renamedTo == nil ? nil : fileName,
                     renamedTo: plan.renamedTo,
                     fileSystem: fileSystem
@@ -696,7 +696,9 @@ enum PatchService {
         }
 
         // The renamed copy is the asset itself: it still counts only while it
-        // exists and still differs from the shipped bytes.
+        // exists, still differs from the shipped bytes, and the manifest still
+        // points at it. Free Fire re-downloads its own copy on launch and
+        // rewrites `fileinfo`, so a file that merely exists is not enough.
         for rename in renames {
             guard let applied = try? fileSystem.read(rename.applied),
                   let original = try? BackupStore.read(
@@ -706,6 +708,20 @@ enum PatchService {
                 return false
             }
             if applied == original { return false }
+
+            if let manifest = CacheManifest.manifestPath(for: rename.applied),
+               let raw = try? fileSystem.read(manifest),
+               let text = String(data: raw, encoding: .utf8)
+                   ?? String(data: raw, encoding: .isoLatin1),
+               let leaf = rename.applied.components(separatedBy: "/").last,
+               let dot = leaf.firstIndex(of: ".") {
+                let escapedToken = String(leaf[leaf.index(after: dot)...])
+                let token = escapedToken
+                    .replacingOccurrences(of: "~2B", with: "+")
+                    .replacingOccurrences(of: "~2F", with: "/")
+                    .replacingOccurrences(of: "~3D", with: "=")
+                if !token.isEmpty && !text.contains(token) { return false }
+            }
             checked += 1
         }
         return checked > 0
