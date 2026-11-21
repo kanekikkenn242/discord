@@ -61,25 +61,113 @@ enum ContainerStore {
         return nil
     }
 
+    static let bundleCachePrefix = "container.bundle."
+
     /// `<bundle container>/<Name>.app`. Free Fire's shipped asset tree
     /// (`Data/Raw/ios/...`) lives here, so asset packages need this root in
     /// addition to the data container's `Documents`.
+    ///
+    /// A re-signed build gets `lookup denied` for MCM class 1, so the bundle
+    /// root is enumerated through the same worse_query grant the data
+    /// containers use. Only a `.app` whose `CFBundleIdentifier` matches is
+    /// accepted, so a neighbouring app is never patched by mistake.
     static func resolveApplicationBundlePath(bundleID: String) -> String? {
+        // The cached path is validated with a fresh grant, never trusted
+        // blindly: an app update moves the bundle container.
+        if let cached = UserDefaults.standard.string(forKey: bundleCachePrefix + bundleID),
+           cached.hasPrefix(appBundleRoot + "/"),
+           activateSandboxAccess(to: cached),
+           bundleIdentifier(atBundlePath: cached) == bundleID {
+            return cached
+        }
+
         var lookupError: NSString?
-        guard let raw = MCMContainerPathForIdentifier(1, bundleID, false, &lookupError) else {
+        if let raw = MCMContainerPathForIdentifier(1, bundleID, false, &lookupError) {
+            let container = PatchPath.canonicalContainerPath(raw)
+            if container.hasPrefix(appBundleRoot + "/") {
+                var readable = false
+                if let app = appBundle(
+                    in: container,
+                    bundleID: bundleID,
+                    activating: false,
+                    anyReadable: &readable
+                ) {
+                    rememberBundle(app, bundleID: bundleID)
+                    return app
+                }
+            }
+        } else {
             log(
                 "patch: MCM could not resolve the bundle container for \(bundleID), detail="
                     + (lookupError.map(String.init) ?? "unavailable"),
                 level: .trace
             )
+        }
+
+        guard activateSandboxAccess(to: appBundleRoot) else {
+            log(
+                "patch: no sandbox access to \(appBundleRoot) — asset targets stay unresolved",
+                level: .warning
+            )
             return nil
         }
 
-        let container = PatchPath.canonicalContainerPath(raw)
-        guard container.hasPrefix(appBundleRoot + "/") else { return nil }
+        let containers = enumerateDirectories(path: appBundleRoot)
+            .map { PatchPath.canonicalContainerPath($0) }
+            .filter {
+                $0.hasPrefix(appBundleRoot + "/")
+                    && UUID(uuidString: ($0 as NSString).lastPathComponent) != nil
+            }
 
+        // Pass 1 reads each Info.plist through the root grant only; a grant on
+        // every bundle in turn would cost seconds. Pass 2 is the fallback for
+        // devices where that read is denied.
+        var plistsReadable = false
+        for container in containers {
+            if let app = appBundle(
+                in: container,
+                bundleID: bundleID,
+                activating: false,
+                anyReadable: &plistsReadable
+            ) {
+                rememberBundle(app, bundleID: bundleID)
+                return app
+            }
+        }
+        if !plistsReadable {
+            for container in containers {
+                var readable = false
+                if let app = appBundle(
+                    in: container,
+                    bundleID: bundleID,
+                    activating: true,
+                    anyReadable: &readable
+                ) {
+                    rememberBundle(app, bundleID: bundleID)
+                    return app
+                }
+            }
+        }
+
+        log("patch: no .app for \(bundleID) inside \(appBundleRoot)", level: .warning)
+        return nil
+    }
+
+    private static func rememberBundle(_ path: String, bundleID: String) {
+        UserDefaults.standard.set(path, forKey: bundleCachePrefix + bundleID)
+        log("patch: app bundle resolved at \(path)")
+    }
+
+    /// `<container>/<Name>.app`, matched by its Info.plist identifier.
+    private static func appBundle(
+        in container: String,
+        bundleID: String,
+        activating: Bool,
+        anyReadable: inout Bool
+    ) -> String? {
         var names = (try? FileManager.default.contentsOfDirectory(atPath: container)) ?? []
-        if names.isEmpty, activateSandboxAccess(to: container) {
+        if names.isEmpty {
+            _ = activateSandboxAccess(to: container)
             names = (try? FileManager.default.contentsOfDirectory(atPath: container)) ?? []
         }
 
@@ -87,20 +175,33 @@ enum ContainerStore {
             let candidate = PatchPath.canonicalContainerPath(
                 (container as NSString).appendingPathComponent(name)
             )
-            guard FileManager.default.fileExists(atPath: candidate + "/Info.plist") else {
-                continue
+            if activating {
+                _ = activateSandboxAccess(to: candidate)
             }
+            guard let identifier = bundleIdentifier(atBundlePath: candidate) else { continue }
+            anyReadable = true
+            guard identifier == bundleID else { continue }
             let activated = activateSandboxAccess(to: candidate)
             guard activated
                 || (try? FileManager.default.contentsOfDirectory(atPath: candidate)) != nil else {
                 continue
             }
-            log("patch: app bundle resolved at \(candidate)")
             return candidate
         }
-
-        log("patch: no .app inside the bundle container for \(bundleID)", level: .warning)
         return nil
+    }
+
+    private static func bundleIdentifier(atBundlePath path: String) -> String? {
+        let plistPath = (path as NSString).appendingPathComponent("Info.plist")
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: plistPath)),
+              let plist = try? PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+              ) as? [String: Any] else {
+            return nil
+        }
+        return plist["CFBundleIdentifier"] as? String
     }
 
     /// Grants this process a read-write sandbox extension for an absolute
