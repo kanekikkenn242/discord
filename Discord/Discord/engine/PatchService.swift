@@ -242,12 +242,19 @@ enum PatchService {
         // never overwritten, so a second package cannot record modded bytes
         // as the original.
         var shipped: [String: Data] = [:]
+        let priorRenames = RenamedTargetsStore.load(productID: product.id, bundleID: bundleID)
         for target in targets {
-            if BackupStore.hasBackup(bundleID: bundleID, relativePath: target.relativePath) {
-                log("patch: backup already present for \(target.relativePath)", level: .trace)
+            // The resolver may pick a previously renamed copy (already
+            // patched). Its backup belongs to the original name, so never
+            // capture the patched bytes as a new "original".
+            let backupKey = priorRenames
+                .first(where: { $0.applied == target.relativePath })?.original
+                ?? target.relativePath
+            if BackupStore.hasBackup(bundleID: bundleID, relativePath: backupKey) {
+                log("patch: backup already present for \(backupKey)", level: .trace)
                 if let existing = try? BackupStore.read(
                     bundleID: bundleID,
-                    relativePath: target.relativePath
+                    relativePath: backupKey
                 ) {
                     shipped[target.relativePath] = existing
                 }
@@ -258,10 +265,10 @@ enum PatchService {
             let record = try BackupStore.capture(
                 original,
                 bundleID: bundleID,
-                relativePath: target.relativePath
+                relativePath: backupKey
             )
             log(
-                "patch: captured \(PatchPath.prettyBytes(record.size)) original for \(target.relativePath)",
+                "patch: captured \(PatchPath.prettyBytes(record.size)) original for \(backupKey)",
                 level: .info
             )
         }
@@ -478,6 +485,17 @@ enum PatchService {
               let device = try? fileSystem.read(target.relativePath) else {
             return source
         }
+
+        // cache_res carries the hit colliders. The avatar index cannot change
+        // HEAD vs TORSO, so relocate the helper type fields by their serialized
+        // marker instead of by absolute offset.
+        if target.relativePath.contains("/cache_res"),
+           let shifted = ColliderShift.makeAllHead(in: device, reference: raw) {
+            log("patch: \(target.relativePath) — relabelled \(shifted.1) hit collider(s) as HEAD",
+                level: .info)
+            return shifted.0
+        }
+
         guard let base = AssetShift.baseData() else {
             log(
                 "patch: shipped avatar base is missing — writing \(target.rule.source) as is",
