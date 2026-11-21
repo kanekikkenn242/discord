@@ -555,13 +555,20 @@ enum PatchService {
         // successful apply. The recorded targets are authoritative, and they
         // still count only while the file really differs from its backup.
         if let applied = AppliedTargetsStore.load(productID: product.id, bundleID: bundleID),
-           appliedStillInPlace(
-            applied,
-            productID: product.id,
-            bundleID: bundleID,
-            fileSystem: fileSystem
-           ) {
-            return .loaded
+           !applied.isEmpty {
+            let inPlace = appliedStillInPlace(
+                applied,
+                productID: product.id,
+                bundleID: bundleID,
+                fileSystem: fileSystem
+            )
+            log(
+                inPlace
+                    ? "patch: \(product.id) — the patched asset is still on disk"
+                    : "patch: \(product.id) — the game replaced the patched asset or its manifest",
+                level: inPlace ? .success : .warning
+            )
+            if inPlace { return .loaded }
         }
         do {
             let package = try PatchPackage.load(from: url)
