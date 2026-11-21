@@ -8,6 +8,7 @@ struct ContainerMetadata {
 
 enum ContainerStore {
     static let appDataRoot = "/var/mobile/Containers/Data/Application"
+    static let appBundleRoot = "/var/containers/Bundle/Application"
 
     /// Last MCM refusal together with the identity this build is signed with.
     /// An install route that rewrites the bundle identifier (personal/free
@@ -58,6 +59,55 @@ enum ContainerStore {
                 + " entitlement, so the free worse_query route cannot run"
         }
         return nil
+    }
+
+    /// `<bundle container>/<Name>.app`. Free Fire's shipped asset tree
+    /// (`Data/Raw/ios/...`) lives here, so asset packages need this root in
+    /// addition to the data container's `Documents`.
+    static func resolveApplicationBundlePath(bundleID: String) -> String? {
+        var lookupError: NSString?
+        guard let raw = MCMContainerPathForIdentifier(1, bundleID, false, &lookupError) else {
+            log(
+                "patch: MCM could not resolve the bundle container for \(bundleID), detail="
+                    + (lookupError.map(String.init) ?? "unavailable"),
+                level: .trace
+            )
+            return nil
+        }
+
+        let container = PatchPath.canonicalContainerPath(raw)
+        guard container.hasPrefix(appBundleRoot + "/") else { return nil }
+
+        var names = (try? FileManager.default.contentsOfDirectory(atPath: container)) ?? []
+        if names.isEmpty, activateSandboxAccess(to: container) {
+            names = (try? FileManager.default.contentsOfDirectory(atPath: container)) ?? []
+        }
+
+        for name in names where name.hasSuffix(".app") {
+            let candidate = PatchPath.canonicalContainerPath(
+                (container as NSString).appendingPathComponent(name)
+            )
+            guard FileManager.default.fileExists(atPath: candidate + "/Info.plist") else {
+                continue
+            }
+            let activated = activateSandboxAccess(to: candidate)
+            guard activated
+                || (try? FileManager.default.contentsOfDirectory(atPath: candidate)) != nil else {
+                continue
+            }
+            log("patch: app bundle resolved at \(candidate)")
+            return candidate
+        }
+
+        log("patch: no .app inside the bundle container for \(bundleID)", level: .warning)
+        return nil
+    }
+
+    /// Grants this process a read-write sandbox extension for an absolute
+    /// path, through the same worse_query route used for data containers.
+    static func activateSandboxAccess(to path: String) -> Bool {
+        guard let group = MCMAppGroupIdentifier() else { return false }
+        return activateEscape(path, group: group)
     }
 
     // MARK: - Free route (worse_query, iOS 26.0–27.3)
@@ -301,7 +351,7 @@ enum ContainerStore {
         return MCMContainerIdentifierForPath(path)
     }
 
-    private static func activateEscape(_ path: String, group: String) -> Bool {
+    static func activateEscape(_ path: String, group: String) -> Bool {
         var escapeError: NSString?
         let activated = MCMWorseQueryActivate(path, group, &escapeError)
         if !activated, let escapeError {

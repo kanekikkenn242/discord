@@ -11,16 +11,22 @@ enum PatchRuntime {
         _ body: (PatchFileSystem) throws -> T
     ) throws -> T {
         if let root = accessibleLocalRoot(bundleID: game.rawValue) {
-            log("patch: backend = local container \(root)", level: .info)
-            return try body(LocalPatchFileSystem(rootPath: root))
+            let bundle = ContainerStore.resolveApplicationBundlePath(bundleID: game.rawValue)
+            log(
+                "patch: backend = local container \(root)"
+                    + (bundle.map { " + bundle \($0)" } ?? ""),
+                level: .info
+            )
+            return try body(LocalPatchFileSystem(rootPath: root, bundleRoot: bundle))
         }
 
         if allowKernel, shouldTryKernel {
             log("patch: local container is not readable — running kernel exploit", level: .warning)
             let started = KernelExploit.run()
             if started, let root = accessibleLocalRoot(bundleID: game.rawValue) {
+                let bundle = ContainerStore.resolveApplicationBundlePath(bundleID: game.rawValue)
                 log("patch: backend = kernel/MCM after exploit", level: .success)
-                return try body(LocalPatchFileSystem(rootPath: root))
+                return try body(LocalPatchFileSystem(rootPath: root, bundleRoot: bundle))
             }
             log("patch: kernel route did not expose the container", level: .warning)
         }
@@ -57,11 +63,12 @@ enum PatchRuntime {
                 bundleID: game.rawValue
             ) != nil,
                let root = ContainerStore.resolveAppContainerPath(bundleID: game.rawValue) {
+                let bundle = ContainerStore.resolveApplicationBundlePath(bundleID: game.rawValue)
                 log(
                     "patch: backend = worse_query at \(root) after the pairing probe",
                     level: .success
                 )
-                return try body(LocalPatchFileSystem(rootPath: root))
+                return try body(LocalPatchFileSystem(rootPath: root, bundleRoot: bundle))
             }
 
             throw PatchServiceError.noAccess(

@@ -94,7 +94,12 @@ enum PatchService {
     // MARK: - Cache token
 
     static func resolveCacheToken(fileSystem: PatchFileSystem) throws -> String {
+        // Free Fire ships the hot-update manifest as `Data/Raw/ios/fileinfo`
+        // inside the `.app`; older builds also carried a copy next to the
+        // bundles, which is why both shapes are tried.
         let candidates = [
+            "Documents/Data/Raw/ios/fileinfo",
+            "Data/Raw/ios/fileinfo",
             "Documents/Data/Raw/ios/gameassetbundles/cache_res.fileinfo",
             "Data/Raw/ios/gameassetbundles/cache_res.fileinfo"
         ]
