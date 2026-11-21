@@ -96,16 +96,18 @@ enum AssetShift {
                 placements.append("\(run.lowerBound)->\(start) [\(placement.detail), already applied]")
                 continue
             }
-            for offset in 0..<run.count {
-                let target = start + offset
-                guard deviceBytes[target] == baseBytes[run.lowerBound + offset] else {
-                    log(
-                        "patch: device asset differs at \(target) (base \(run.lowerBound + offset)) — device "
-                            + hex(deviceBytes[start..<start + run.count])
-                            + ", base " + hex(baseBytes[run]) ,
-                        level: .warning
-                    )
-                    return nil
+            if !placement.semantic {
+                for offset in 0..<run.count {
+                    let target = start + offset
+                    guard deviceBytes[target] == baseBytes[run.lowerBound + offset] else {
+                        log(
+                            "patch: device asset differs at \(target) (base \(run.lowerBound + offset)) — device "
+                                + hex(deviceBytes[start..<start + run.count])
+                                + ", base " + hex(baseBytes[run]) ,
+                            level: .warning
+                        )
+                        return nil
+                    }
                 }
             }
             for offset in 0..<run.count {
@@ -164,6 +166,10 @@ enum AssetShift {
     private struct Placement {
         let start: Int
         let detail: String
+        /// A bone marker is a strong anchor: the device can already carry a
+        /// different float value (a previous profile or this build's own
+        /// default), so the base-byte equality check does not apply.
+        let semantic: Bool
     }
 
     /// Finds where `run` lives in the device build.
@@ -190,7 +196,7 @@ enum AssetShift {
                 if let match = uniqueMatch(of: base, in: device, at: anchor) {
                     let start = match + length
                     if start + run.count <= device.count {
-                        return Placement(start: start, detail: "byte window \(length) before")
+                        return Placement(start: start, detail: "byte window \(length) before", semantic: false)
                     }
                 }
             }
@@ -201,7 +207,7 @@ enum AssetShift {
                    match >= run.count {
                     let start = match - run.count
                     if start + run.count <= device.count {
-                        return Placement(start: start, detail: "byte window \(length) after")
+                        return Placement(start: start, detail: "byte window \(length) after", semantic: false)
                     }
                 }
             }
@@ -301,7 +307,7 @@ enum AssetShift {
             }
             let start = deviceMarker - 12 + (run.lowerBound - triple)
             guard start >= 0, start + run.count <= device.count else { continue }
-            return Placement(start: start, detail: "bone anchor \(rank)")
+            return Placement(start: start, detail: "bone anchor \(rank)", semantic: true)
         }
         return nil
     }
