@@ -153,6 +153,53 @@ enum ContainerStore {
         return nil
     }
 
+    /// The bundle volume is closed on 27.x (class 7 and class 13 both answer
+    /// `-3` from containermanagerd), so the data container is the only tree a
+    /// package can live in. It never ships `Data/Raw` itself, and the game
+    /// decides where it reads hot-update assets, so its layout has to be in
+    /// the log: that listing is what says whether an asset target exists at
+    /// all or the package is pointed at a path this build never reads.
+    private static var didDescribeDataContainer = false
+
+    static func logDataContainerLayout(_ root: String) {
+        guard !didDescribeDataContainer else { return }
+        didDescribeDataContainer = true
+        let fileManager = FileManager.default
+        func listing(_ relative: String) -> String? {
+            let path = relative.isEmpty
+                ? root
+                : (root as NSString).appendingPathComponent(relative)
+            guard fileManager.fileExists(atPath: path),
+                  let names = try? fileManager.contentsOfDirectory(atPath: path) else {
+                return nil
+            }
+            if names.isEmpty { return "<empty>" }
+            let limit = 14
+            let shown = names.sorted().prefix(limit).joined(separator: ", ")
+            return names.count > limit ? shown + " …(\(names.count))" : shown
+        }
+        var notes: [String] = []
+        for relative in [
+            "",
+            "Documents",
+            "Documents/Data",
+            "Documents/Data/Raw",
+            "Documents/Data/Raw/ios",
+            "Documents/Data/Raw/ios/gameassetbundles",
+            "Library",
+            "Library/Caches",
+            "Library/Application Support"
+        ] {
+            guard let note = listing(relative) else { continue }
+            notes.append("\(relative.isEmpty ? "root" : relative): \(note)")
+        }
+        log(
+            "patch: data container layout — "
+                + (notes.isEmpty ? "nothing is readable" : notes.joined(separator: " | ")),
+            level: .info
+        )
+    }
+
     private static func rememberBundle(_ path: String, bundleID: String) {
         UserDefaults.standard.set(path, forKey: bundleCachePrefix + bundleID)
         log("patch: app bundle resolved at \(path)")

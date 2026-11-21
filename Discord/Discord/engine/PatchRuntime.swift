@@ -12,6 +12,7 @@ enum PatchRuntime {
     ) throws -> T {
         if let root = accessibleLocalRoot(bundleID: game.rawValue) {
             let bundle = ContainerStore.resolveApplicationBundlePath(bundleID: game.rawValue)
+            ContainerStore.logDataContainerLayout(root)
             log(
                 "patch: backend = local container \(root)"
                     + (bundle.map { " + bundle \($0)" } ?? ""),
