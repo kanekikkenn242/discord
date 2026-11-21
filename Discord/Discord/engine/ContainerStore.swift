@@ -205,10 +205,44 @@ enum ContainerStore {
     }
 
     /// Grants this process a read-write sandbox extension for an absolute
-    /// path, through the same worse_query route used for data containers.
+    /// path. Two independent routes: worse_query (needs an App Group and is
+    /// refused for everything outside the data containers) and the
+    /// part-domain traversal in bad_query, which needs no entitlement and is
+    /// the only one that reaches `/var/containers/Bundle/Application`.
     static func activateSandboxAccess(to path: String) -> Bool {
-        guard let group = MCMAppGroupIdentifier() else { return false }
-        return activateEscape(path, group: group)
+        // worse_query only ever resolves inside the data volume, so the swap
+        // is skipped for bundle paths instead of paying a refusal per call.
+        let canonical = PatchPath.canonicalContainerPath(path)
+        let inDataVolume = canonical.hasPrefix(
+            PatchPath.canonicalContainerPath(appDataRoot) + "/"
+        )
+        if inDataVolume,
+           let group = MCMAppGroupIdentifier(),
+           activateEscape(path, group: group) {
+            return true
+        }
+        return activateBadQuery(path)
+    }
+
+    private static let badQueryLock = NSLock()
+    /// Consumed extensions stay consumed for the life of the process, so the
+    /// handles are kept instead of released.
+    private static var badQueryHandles: [Int64] = []
+
+    private static func activateBadQuery(_ path: String) -> Bool {
+        let clean = path.hasSuffix("/") ? String(path.dropLast()) : path
+        guard clean.hasPrefix("/") else { return false }
+        var pathC = clean.utf8CString.map { $0 }
+        let handle = bad_query(&pathC, false, nil, false)
+        guard handle >= 0 else {
+            log("patch: bad_query refused \(clean) -> \(handle)", level: .info)
+            return false
+        }
+        badQueryLock.lock()
+        badQueryHandles.append(handle)
+        badQueryLock.unlock()
+        log("patch: bad_query granted access to \(clean)")
+        return true
     }
 
     // MARK: - Free route (worse_query, iOS 26.0–27.3)
