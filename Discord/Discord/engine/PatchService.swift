@@ -314,7 +314,8 @@ enum PatchService {
                     current: current,
                     shipped: original,
                     patched: blob,
-                    patchedGzip: package.files[target.rule.source],
+                    patchedGzip: target.relativePath.contains("/cache_res")
+                        ? blob : package.files[target.rule.source],
                     renamedFrom: plan.renamedTo == nil ? nil : fileName,
                     renamedTo: plan.renamedTo,
                     fileSystem: fileSystem
@@ -494,10 +495,13 @@ enum PatchService {
             ?? package.files.first(where: { $0.key.hasSuffix("_raw.bin") })?.value
             ?? raw
         if target.relativePath.contains("/cache_res"),
-           let shifted = ColliderShift.makeAllHead(in: device, reference: colliderReference) {
+           let deviceRaw = GzipData.decompress(device) ?? device,
+           let referenceRaw = GzipData.decompress(colliderReference) ?? colliderReference,
+           let shifted = ColliderShift.makeAllHead(in: deviceRaw, reference: referenceRaw),
+           let gzipped = GzipData.compress(shifted.0) {
             log("patch: \(target.relativePath) — relabelled \(shifted.1) hit collider(s) as HEAD",
                 level: .info)
-            return shifted.0
+            return gzipped
         }
 
         guard let base = AssetShift.baseData() else {
