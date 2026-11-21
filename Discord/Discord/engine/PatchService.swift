@@ -307,9 +307,9 @@ enum PatchService {
                     current: current,
                     shipped: original,
                     patched: blob,
+                    patchedGzip: package.files[target.rule.source],
                     renamedFrom: plan.renamedTo == nil ? nil : fileName,
                     renamedTo: plan.renamedTo,
-                    patchedGzip: AssetShift.gzipped(blob),
                     fileSystem: fileSystem
                 ) {
                     manifests.append(replacement)
