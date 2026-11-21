@@ -207,8 +207,9 @@ enum ContainerStore {
     /// Grants this process a read-write sandbox extension for an absolute
     /// path. Two independent routes: worse_query (needs an App Group and is
     /// refused for everything outside the data containers) and the
-    /// part-domain traversal in bad_query, which needs no entitlement and is
-    /// the only one that reaches `/var/containers/Bundle/Application`.
+    /// part-domain traversal in bad_query, which is the only one that reaches
+    /// `/var/containers/Bundle/Application`. The traversal is tried with this
+    /// build's own group first and with the system group as the fallback.
     static func activateSandboxAccess(to path: String) -> Bool {
         // worse_query only ever resolves inside the data volume, so the swap
         // is skipped for bundle paths instead of paying a refusal per call.
@@ -232,16 +233,48 @@ enum ContainerStore {
     private static func activateBadQuery(_ path: String) -> Bool {
         let clean = path.hasSuffix("/") ? String(path.dropLast()) : path
         guard clean.hasPrefix("/") else { return false }
+
+        // Class 7 asks for a group this build is actually entitled to, and
+        // containermanagerd resolves its part without confining part_domain
+        // (that is the whole worse_query escape). Class 13 needs the
+        // systemgroup identity of a build signed as com.apple.*, which a
+        // re-signed app does not have: on 27.0.1 it answers `no result` (-3)
+        // for /var/containers/Bundle/Application, so it goes last.
+        if let group = MCMAppGroupIdentifier(),
+           consumeBadQuery(clean, group: group) {
+            log("patch: bad_query granted access to \(clean) via group \(group)")
+            return true
+        }
+        if consumeBadQuery(clean, group: nil) {
+            log("patch: bad_query granted access to \(clean) via system group")
+            return true
+        }
+        return false
+    }
+
+    /// `create` is only a guard flag in bad_query.c (it skips the lstat), and
+    /// the query itself is identical, so a target the sandbox cannot stat is
+    /// still traversed.
+    private static func consumeBadQuery(_ clean: String, group: String?) -> Bool {
         var pathC = clean.utf8CString.map { $0 }
-        let handle = bad_query(&pathC, false, nil, false)
+        let handle: Int64
+        if var groupC = group.map({ identifier in Array(identifier.utf8CString) }) {
+            handle = groupC.withUnsafeMutableBufferPointer { buffer in
+                bad_query(&pathC, true, buffer.baseAddress, false)
+            }
+        } else {
+            handle = bad_query(&pathC, true, nil, false)
+        }
         guard handle >= 0 else {
-            log("patch: bad_query refused \(clean) -> \(handle)", level: .info)
+            log(
+                "patch: bad_query refused \(clean) via \(group ?? "systemgroup") -> \(handle)",
+                level: .info
+            )
             return false
         }
         badQueryLock.lock()
         badQueryHandles.append(handle)
         badQueryLock.unlock()
-        log("patch: bad_query granted access to \(clean)")
         return true
     }
 
