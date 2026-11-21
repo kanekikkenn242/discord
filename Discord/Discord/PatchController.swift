@@ -57,6 +57,30 @@ final class PatchController: ObservableObject {
                             fileSystem: fileSystem
                         )
                     }
+
+                    // Free Fire rewrites its content-addressed hot asset on
+                    // launch, so a patch that was in place yesterday comes
+                    // back as .partial today. Re-apply it here instead of
+                    // waiting for the user to notice the card switched off.
+                    for product in products where FreeFireCatalog.hasPackage(for: product) {
+                        guard case .partial = map[product.id] ?? .notLoaded,
+                              let url = FreeFireCatalog.packageURL(for: product),
+                              let package = try? PatchPackage.load(from: url) else { continue }
+                        do {
+                            _ = try PatchService.apply(
+                                package: package,
+                                product: product,
+                                bundleID: game.rawValue,
+                                fileSystem: fileSystem
+                            )
+                            log("patch: \(product.id) — re-applied after the game replaced its asset",
+                                level: .success)
+                            map[product.id] = .loaded
+                        } catch {
+                            log("patch: \(product.id) auto re-apply failed — \(error.localizedDescription)",
+                                level: .warning)
+                        }
+                    }
                     return (map, fileSystem.backendName)
                 }
                 resolved.merge(outcome.0) { _, new in new }
