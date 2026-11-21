@@ -40,6 +40,8 @@ enum CacheManifest {
         current: Data,
         shipped: Data?,
         patched: Data,
+        renamedFrom: String? = nil,
+        renamedTo: String? = nil,
         fileSystem: PatchFileSystem
     ) throws -> Replacement? {
         guard let manifest = manifestPath(for: asset),
@@ -58,6 +60,16 @@ enum CacheManifest {
         var notes: [String] = []
         var changed = false
         var matchedCurrent = false
+
+        // A hot-update file is named after its own digest, so a renamed asset
+        // is also renamed in the manifest when the row records the file name.
+        if let from = renamedFrom, let to = renamedTo, from != to, updated.contains(from) {
+            let count = updated.components(separatedBy: from).count - 1
+            updated = updated.replacingOccurrences(of: from, with: to)
+            changed = true
+            matchedCurrent = true
+            notes.append("name×\(count)")
+        }
 
         var sources: [Data] = [current]
         if let shipped, shipped != current {

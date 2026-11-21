@@ -18,11 +18,25 @@ protocol PatchFileSystem {
     /// calls through the `PatchFileSystem` existential dispatch statically and
     /// `LocalPatchFileSystem`'s hot-update discovery is never reached.
     func resolveExisting(_ relativePath: String) throws -> String
+    /// Stores `data` beside an existing file under a new name and removes the
+    /// old one; returns the new container-relative path. Hot-update assets are
+    /// content addressed, so patched bytes have to live under their own name.
+    func replaceWithNewName(_ newName: String, data: Data, at relativePath: String) throws -> String
+    /// Writes a file that does not exist yet, inside a directory that does.
+    func create(_ data: Data, at relativePath: String) throws
 }
 
 extension PatchFileSystem {
     var bundleRoot: String? { nil }
     var hotRoots: [String] { [] }
+
+    func replaceWithNewName(_ newName: String, data: Data, at relativePath: String) throws -> String {
+        throw PatchServiceError.noAccess("\(backendName) cannot rename \(relativePath)")
+    }
+
+    func create(_ data: Data, at relativePath: String) throws {
+        throw PatchServiceError.noAccess("\(backendName) cannot create \(relativePath)")
+    }
 
     /// The package rules are container-relative and may target either
     /// `Documents/...` (current Free Fire layout) or the bare path used by
@@ -198,6 +212,45 @@ struct LocalPatchFileSystem: PatchFileSystem {
 
     func delete(_ relativePath: String) throws {
         try FileManager.default.removeItem(at: try targetURL(relativePath))
+    }
+
+    /// Renames inside the directory the asset already lives in, so a hot-update
+    /// tree keeps its layout and only the content-addressed component changes.
+    func replaceWithNewName(_ newName: String, data: Data, at relativePath: String) throws -> String {
+        let safe = try PatchPath.safeRelative(relativePath)
+        let current = try targetURL(safe)
+        let directory = current.deletingLastPathComponent()
+        let destination = directory.appendingPathComponent(newName).standardizedFileURL
+        let path = (destination.path as NSString).standardizingPath
+        let insideContainer = path.hasPrefix(rootPath + "/")
+        let insideBundle = bundleRoot.map { path.hasPrefix($0 + "/") } ?? false
+        let insideHot = hotRoots.contains { path.hasPrefix($0 + "/") }
+        guard insideContainer || insideBundle || insideHot else {
+            throw PatchServiceError.unsafePath(path)
+        }
+        try data.write(to: destination, options: .atomic)
+        if path != (current.path as NSString).standardizingPath {
+            try FileManager.default.removeItem(at: current)
+        }
+        guard insideContainer else { return safe }
+        return String(path.dropFirst(rootPath.count + 1))
+    }
+
+    func create(_ data: Data, at relativePath: String) throws {
+        let safe = try PatchPath.safeRelative(relativePath)
+        let url = URL(fileURLWithPath: rootPath).appendingPathComponent(safe).standardizedFileURL
+        let path = (url.path as NSString).standardizingPath
+        guard path.hasPrefix(rootPath + "/") else {
+            throw PatchServiceError.unsafePath(path)
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(
+            atPath: url.deletingLastPathComponent().path,
+            isDirectory: &isDirectory
+        ), isDirectory.boolValue else {
+            throw PatchServiceError.targetMissing((safe as NSString).deletingLastPathComponent)
+        }
+        try data.write(to: url, options: .atomic)
     }
 }
 

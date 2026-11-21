@@ -180,6 +180,42 @@ enum BackupStore {
     }
 }
 
+/// A hot-update file is content addressed, so a patched asset is stored under
+/// the name of its own bytes. The backup stays keyed on the shipped name; this
+/// record is what lets restore remove the renamed copy afterwards.
+struct RenamedTarget {
+    let original: String
+    let applied: String
+}
+
+enum RenamedTargetsStore {
+    private static func key(productID: String, bundleID: String) -> String {
+        "discord.renamedTargets.\(bundleID).\(productID)"
+    }
+
+    static func save(_ targets: [RenamedTarget], productID: String, bundleID: String) {
+        let encoded = targets.map { "\($0.original)|\($0.applied)" }
+        UserDefaults.standard.set(encoded, forKey: key(productID: productID, bundleID: bundleID))
+    }
+
+    static func load(productID: String, bundleID: String) -> [RenamedTarget] {
+        let raw = UserDefaults.standard.stringArray(
+            forKey: key(productID: productID, bundleID: bundleID)
+        ) ?? []
+        return raw.compactMap { entry in
+            let parts = entry.components(separatedBy: "|")
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else {
+                return nil
+            }
+            return RenamedTarget(original: parts[0], applied: parts[1])
+        }
+    }
+
+    static func clear(productID: String, bundleID: String) {
+        UserDefaults.standard.removeObject(forKey: key(productID: productID, bundleID: bundleID))
+    }
+}
+
 enum AppliedTargetsStore {
     private static func key(productID: String, bundleID: String) -> String {
         "discord.appliedTargets.\(bundleID).\(productID)"

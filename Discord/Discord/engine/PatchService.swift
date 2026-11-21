@@ -53,6 +53,24 @@ enum PatchServiceError: LocalizedError {
     }
 }
 
+/// One file the apply intends to write. A hot-update asset is content
+/// addressed, so its patched bytes are stored under a new file name beside the
+/// shipped one; `originalPath` stays the path the backup is keyed on.
+private struct PlannedWrite {
+    let originalPath: String
+    var path: String
+    let data: Data
+    let label: String
+    var renamedTo: String?
+}
+
+/// One file the apply already wrote, for rollback and for restore.
+private struct AppliedWrite {
+    let originalPath: String
+    var appliedPath: String
+    let renamed: Bool
+}
+
 struct PatchApplyResult {
     let productID: String
     let packageName: String
@@ -232,23 +250,55 @@ enum PatchService {
             )
         }
 
-        // The hot-update tree is verified against the category manifest, so the
-        // asset's digest has to move with its bytes: otherwise Free Fire treats
-        // the tree as corrupt, re-downloads the hotfix and the change is gone
-        // before the game is even reachable.
+        // The hot-update tree is content addressed: the file name carries the
+        // SHA-1 of the bytes and the category manifest records the same digest.
+        // A patched asset therefore has to be stored under the name of its own
+        // bytes, with the manifest moved along, or Free Fire decides the cached
+        // file is stale and quietly downloads the original back over it.
+        var plans: [PlannedWrite] = []
         var manifests: [CacheManifest.Replacement] = []
-        for (index, target) in targets.enumerated() where target.relativePath.contains("/contentcache/") {
-            guard let original = shipped[target.relativePath] else { continue }
-            let current = (try? fileSystem.read(target.relativePath)) ?? original
-            if let replacement = try CacheManifest.repair(
-                asset: target.relativePath,
-                current: current,
-                shipped: original,
-                patched: blobs[index],
-                fileSystem: fileSystem
-            ) {
-                manifests.append(replacement)
+        for (index, target) in targets.enumerated() {
+            let originalPath = target.relativePath
+            let blob = blobs[index]
+            let original = shipped[originalPath]
+            let current = (try? fileSystem.read(originalPath)) ?? original
+            var plan = PlannedWrite(
+                originalPath: originalPath,
+                path: originalPath,
+                data: blob,
+                label: target.rule.source,
+                renamedTo: nil
+            )
+
+            if originalPath.contains("/contentcache/"), let current, current != blob {
+                let fileName = (originalPath as NSString).lastPathComponent
+                let directory = (originalPath as NSString).deletingLastPathComponent
+                if let newName = HotAssetName.name(for: blob, replacing: fileName, current: current) {
+                    plan.path = directory + "/" + newName
+                    plan.renamedTo = newName
+                    log(
+                        "patch: \(fileName) is named after its own content — the patched asset is stored as \(newName)",
+                        level: .info
+                    )
+                } else {
+                    log(
+                        "patch: \(fileName) does not carry its content digest — keeping the shipped name",
+                        level: .warning
+                    )
+                }
+                if let replacement = try CacheManifest.repair(
+                    asset: originalPath,
+                    current: current,
+                    shipped: original,
+                    patched: blob,
+                    renamedFrom: plan.renamedTo == nil ? nil : fileName,
+                    renamedTo: plan.renamedTo,
+                    fileSystem: fileSystem
+                ) {
+                    manifests.append(replacement)
+                }
             }
+            plans.append(plan)
         }
         for manifest in manifests where !BackupStore.hasBackup(bundleID: bundleID, relativePath: manifest.path) {
             let original = try fileSystem.read(manifest.path)
@@ -260,22 +310,41 @@ enum PatchService {
             log("patch: captured original for \(manifest.path)", level: .info)
         }
 
-        var attempted: [String] = []
+        var attempted: [AppliedWrite] = []
         do {
-            for (index, target) in targets.enumerated() {
-                let blob = blobs[index]
-                attempted.append(target.relativePath)
-                log("patch: writing \(target.rule.source) -> \(target.relativePath) [\(fileSystem.backendName)]")
-                try fileSystem.write(blob, to: target.relativePath)
-
-                let readBack = try fileSystem.read(target.relativePath)
-                guard readBack == blob else {
-                    throw PatchServiceError.verificationFailed(target.relativePath)
+            for plan in plans {
+                var applied = AppliedWrite(
+                    originalPath: plan.originalPath,
+                    appliedPath: plan.path,
+                    renamed: plan.renamedTo != nil
+                )
+                attempted.append(applied)
+                if let newName = plan.renamedTo {
+                    log(
+                        "patch: writing \(plan.label) -> \(plan.path) (renamed from \((plan.originalPath as NSString).lastPathComponent)) [\(fileSystem.backendName)]"
+                    )
+                    let written = try fileSystem.replaceWithNewName(
+                        newName,
+                        data: plan.data,
+                        at: plan.originalPath
+                    )
+                    applied.appliedPath = written
+                    attempted[attempted.count - 1] = applied
+                } else {
+                    log("patch: writing \(plan.label) -> \(plan.path) [\(fileSystem.backendName)]")
+                    try fileSystem.write(plan.data, to: plan.path)
                 }
-                log("patch: verified \(target.relativePath)", level: .success)
+
+                let readBack = try fileSystem.read(applied.appliedPath)
+                guard readBack == plan.data else {
+                    throw PatchServiceError.verificationFailed(applied.appliedPath)
+                }
+                log("patch: verified \(applied.appliedPath)", level: .success)
             }
             for manifest in manifests {
-                attempted.append(manifest.path)
+                attempted.append(
+                    AppliedWrite(originalPath: manifest.path, appliedPath: manifest.path, renamed: false)
+                )
                 log("patch: updating \(manifest.path) — \(manifest.summary) [\(fileSystem.backendName)]")
                 try fileSystem.write(manifest.data, to: manifest.path)
                 let readBack = try fileSystem.read(manifest.path)
@@ -287,7 +356,7 @@ enum PatchService {
         } catch {
             log("patch: write failed — rolling back \(attempted.count) target(s)", level: .error)
             rollback(
-                paths: attempted,
+                writes: attempted,
                 bundleID: bundleID,
                 fileSystem: fileSystem
             )
@@ -297,13 +366,20 @@ enum PatchService {
                 package: package,
                 bundleID: bundleID,
                 backend: fileSystem.backendName,
-                paths: attempted,
+                paths: attempted.map { $0.originalPath },
                 result: "failed",
                 message: error.localizedDescription
             )
             throw error
         }
 
+        RenamedTargetsStore.save(
+            attempted.filter(\.renamed).map {
+                RenamedTarget(original: $0.originalPath, applied: $0.appliedPath)
+            },
+            productID: product.id,
+            bundleID: bundleID
+        )
         let paths = targets.map { $0.relativePath } + manifests.map { $0.path }
         AppliedTargetsStore.save(paths, productID: product.id, bundleID: bundleID)
         appendLedger(
@@ -393,12 +469,26 @@ enum PatchService {
             throw PatchServiceError.missingBackup(path)
         }
 
+        // A patched asset lives under the name of its own bytes, so the shipped
+        // name is gone. Drop the renamed copy first, or the tree would keep both
+        // and the resolver would see two candidates for one asset.
+        for rename in RenamedTargetsStore.load(productID: product.id, bundleID: bundleID)
+        where rename.applied != rename.original {
+            guard (try? fileSystem.exists(rename.applied)) == true else { continue }
+            try? fileSystem.delete(rename.applied)
+            log("patch: removed renamed copy \(rename.applied)", level: .info)
+        }
+
         var restored: [String] = []
         do {
             for path in paths {
                 let original = try BackupStore.read(bundleID: bundleID, relativePath: path)
                 log("patch: restoring \(path) [\(fileSystem.backendName)]")
-                try fileSystem.write(original, to: path)
+                if (try? fileSystem.exists(path)) == true {
+                    try fileSystem.write(original, to: path)
+                } else {
+                    try fileSystem.create(original, at: path)
+                }
                 let readBack = try fileSystem.read(path)
                 guard readBack == original else {
                     throw PatchServiceError.verificationFailed(path)
@@ -422,6 +512,7 @@ enum PatchService {
         }
 
         AppliedTargetsStore.clear(productID: product.id, bundleID: bundleID)
+        RenamedTargetsStore.clear(productID: product.id, bundleID: bundleID)
         appendLedger(
             action: "restore",
             product: product,
@@ -451,7 +542,12 @@ enum PatchService {
         // successful apply. The recorded targets are authoritative, and they
         // still count only while the file really differs from its backup.
         if let applied = AppliedTargetsStore.load(productID: product.id, bundleID: bundleID),
-           appliedStillInPlace(applied, bundleID: bundleID, fileSystem: fileSystem) {
+           appliedStillInPlace(
+            applied,
+            productID: product.id,
+            bundleID: bundleID,
+            fileSystem: fileSystem
+           ) {
             return .loaded
         }
         do {
@@ -477,11 +573,15 @@ enum PatchService {
 
     private static func appliedStillInPlace(
         _ paths: [String],
+        productID: String,
         bundleID: String,
         fileSystem: PatchFileSystem
     ) -> Bool {
-        guard !paths.isEmpty else { return false }
-        for path in paths {
+        let renames = RenamedTargetsStore.load(productID: productID, bundleID: bundleID)
+        let renamedOriginals = Set(renames.map { $0.original })
+        var checked = 0
+
+        for path in paths where !renamedOriginals.contains(path) {
             guard let relative = try? PatchPath.safeRelative(path),
                   let current = try? fileSystem.read(relative),
                   let original = try? BackupStore.read(
@@ -491,31 +591,53 @@ enum PatchService {
                 return false
             }
             if current == original { return false }
+            checked += 1
         }
-        return true
+
+        // The renamed copy is the asset itself: it still counts only while it
+        // exists and still differs from the shipped bytes.
+        for rename in renames {
+            guard let applied = try? fileSystem.read(rename.applied),
+                  let original = try? BackupStore.read(
+                    bundleID: bundleID,
+                    relativePath: rename.original
+                  ) else {
+                return false
+            }
+            if applied == original { return false }
+            checked += 1
+        }
+        return checked > 0
     }
 
     private static func rollback(
-        paths: [String],
+        writes: [AppliedWrite],
         bundleID: String,
         fileSystem: PatchFileSystem
     ) {
-        for path in paths.reversed() {
-            guard BackupStore.hasBackup(bundleID: bundleID, relativePath: path) else {
-                log("patch: rollback has no backup for \(path)", level: .warning)
+        for write in writes.reversed() {
+            guard BackupStore.hasBackup(bundleID: bundleID, relativePath: write.originalPath) else {
+                log("patch: rollback has no backup for \(write.originalPath)", level: .warning)
                 continue
             }
             do {
-                let original = try BackupStore.read(bundleID: bundleID, relativePath: path)
-                try fileSystem.write(original, to: path)
-                let readBack = try fileSystem.read(path)
-                if readBack == original {
-                    log("patch: rolled back \(path)", level: .success)
+                let original = try BackupStore.read(bundleID: bundleID, relativePath: write.originalPath)
+                if write.renamed {
+                    if (try? fileSystem.exists(write.appliedPath)) == true {
+                        try? fileSystem.delete(write.appliedPath)
+                    }
+                    try fileSystem.create(original, at: write.originalPath)
                 } else {
-                    log("patch: rollback verification failed for \(path)", level: .error)
+                    try fileSystem.write(original, to: write.originalPath)
+                }
+                let readBack = try fileSystem.read(write.originalPath)
+                if readBack == original {
+                    log("patch: rolled back \(write.originalPath)", level: .success)
+                } else {
+                    log("patch: rollback verification failed for \(write.originalPath)", level: .error)
                 }
             } catch {
-                log("patch: rollback failed for \(path) — \(error.localizedDescription)", level: .error)
+                log("patch: rollback failed for \(write.originalPath) — \(error.localizedDescription)", level: .error)
             }
         }
     }
