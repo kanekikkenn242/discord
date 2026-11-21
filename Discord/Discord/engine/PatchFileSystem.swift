@@ -133,13 +133,20 @@ struct LocalPatchFileSystem: PatchFileSystem {
     /// name is used; its container-relative path is returned so every later
     /// access goes through the normal resolver.
     func resolveExisting(_ relativePath: String) throws -> String {
-        if let exact = try? PatchFileSystem.resolveExisting(self, relativePath) {
-            return exact
+        let safe = try PatchPath.safeRelative(relativePath)
+        var candidates: [String] = []
+        if !safe.hasPrefix("Documents/") {
+            candidates.append("Documents/\(safe)")
         }
-        if let discovered = discoverHotUpdateFile(try PatchPath.safeRelative(relativePath)) {
+        candidates.append(safe)
+        for candidate in candidates where (try? exists(candidate)) == true {
+            return candidate
+        }
+        if let discovered = discoverHotUpdateFile(safe) {
             return discovered
         }
-        return try PatchFileSystem.resolveExisting(self, relativePath)
+        log("patch: \(safe) is not on this device — \(describe(safe))", level: .warning)
+        throw PatchServiceError.targetMissing(safe)
     }
 
     private func discoverHotUpdateFile(_ safe: String) -> String? {
