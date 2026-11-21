@@ -45,9 +45,12 @@ SCALE_OFFSETS = {
 }
 
 # name -> (display name, head, spine1, neck)
+# Head and neck are relabelled to the same field at apply time, so the head
+# volume has to cover the neck and the band around it (roughly 5 cm left,
+# right and above). Both profiles therefore use a large head and neck scale.
 SCALE_VARIANTS = {
-    "aimbot_drag": ("Aim Cuello", 3.0, 2.0, 5.0),
-    "aimdrag_neck": ("Aim Cuello + Antena", 10.0, 5.0, 5.0),
+    "aimbot_drag": ("Aim Cuello", 10.0, 5.0, 10.0),
+    "aimdrag_neck": ("Aim Cuello + Antena", 25.0, 10.0, 25.0),
 }
 
 # aimneck_90: two unrelated serialized slots 1.0 -> 211.0
