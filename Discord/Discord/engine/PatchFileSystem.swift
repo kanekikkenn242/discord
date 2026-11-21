@@ -209,7 +209,9 @@ struct LocalPatchFileSystem: PatchFileSystem {
             let manifestURL = URL(fileURLWithPath: hotRoot)
                 .appendingPathComponent("ios")
                 .appendingPathComponent("fileinfo")
-            let recorded = Self.manifestToken(in: manifestURL.path, for: logical)
+            // The manifest row uses the logical name without the `.tdn`
+            // extension (e.g. `avatar/assetindexer,...`), so match on the stem.
+            let recorded = Self.manifestToken(in: manifestURL.path, for: stem)
             let preferred = recorded.flatMap { token in
                 matches.first { $0.contains(token) }
             }
