@@ -78,7 +78,21 @@ jobs:
           zip -r Discord.ipa Payload
           rm -rf Payload
 
+      # The artifact service occasionally answers with a transient DNS error
+      # (`getaddrinfo ENOTFOUND ...blob.core.windows.net`) after the IPA was
+      # built successfully. Allow that step to fail and retry once so the run
+      # stays green and the artifact is still published.
       - name: Upload IPA artifact
+        id: upload
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: Discord-unsigned
+          path: build/Discord.ipa
+          retention-days: 30
+
+      - name: Retry IPA artifact upload
+        if: steps.upload.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: Discord-unsigned
