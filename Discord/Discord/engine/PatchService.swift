@@ -392,12 +392,26 @@ enum PatchService {
         // Post-write verification: Free Fire (or the system) can overwrite
         // patched bytes right after we release them. Re-apply up to 3 times
         // if anything came back as the shipped original.
+        //
+        // An asset that already carried every patched float is written back
+        // byte-for-byte, so its backup and its written bytes are identical.
+        // Comparing those two can never detect a revert — exclude such paths
+        // instead of looping and eventually reporting a missing package.
+        var noOpPaths = Set<String>()
+        for plan in plans {
+            if let backup = try? BackupStore.read(
+                bundleID: bundleID,
+                relativePath: plan.originalPath
+            ), plan.data == backup {
+                noOpPaths.insert(plan.path)
+            }
+        }
         let allPaths = targets.map { $0.relativePath } + manifests.map { $0.path }
         var verifyAttempt = 0
         while verifyAttempt < 3 {
             verifyAttempt += 1
             var reverted: [String] = []
-            for path in allPaths {
+            for path in allPaths where !noOpPaths.contains(path) {
                 guard let current = try? fileSystem.read(path),
                       let backup = try? BackupStore.read(bundleID: bundleID, relativePath: path) else {
                     reverted.append(path)
@@ -410,7 +424,7 @@ enum PatchService {
                 "patch: \(product.packageNames.first ?? product.id) — \(reverted.count) file(s) reverted by the game, re-applying (\(verifyAttempt)/3)",
                 level: .warning
             )
-            try restore(product: product, bundleID: bundleID, package: nil, fileSystem: fileSystem)
+            try restore(product: product, bundleID: bundleID, package: package, fileSystem: fileSystem)
             return try apply(package: package, product: product, bundleID: bundleID, fileSystem: fileSystem)
         }
 
