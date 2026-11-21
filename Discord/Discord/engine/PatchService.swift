@@ -2,6 +2,7 @@ import Foundation
 
 enum PatchServiceError: LocalizedError {
     case invalidPackage(String)
+    case incompatibleAsset(String)
     case unsupportedVersion(Int)
     case decryptionFailed(String)
     case digestMismatch(expected: String, actual: String, file: String)
@@ -21,6 +22,8 @@ enum PatchServiceError: LocalizedError {
         switch self {
         case .invalidPackage(let detail):
             return "Invalid .3105 package: \(detail)"
+        case .incompatibleAsset(let detail):
+            return "This patch does not match the installed game asset: \(detail). Update the patch for this game build and try again."
         case .unsupportedVersion(let version):
             return "Unsupported .3105 version \(version) (only v1 is supported)."
         case .decryptionFailed(let detail):
@@ -477,8 +480,8 @@ enum PatchService {
         if let shifted = AssetShift.apply(patched: raw, to: device, base: base) {
             return shifted
         }
-        throw PatchServiceError.invalidPackage(
-            "\(target.relativePath) is a different build of the asset and its float slots could not be located"
+        throw PatchServiceError.incompatibleAsset(
+            "\(target.relativePath) is a different build and the edited fields could not be located safely"
         )
     }
 

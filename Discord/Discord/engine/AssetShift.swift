@@ -58,30 +58,22 @@ enum AssetShift {
 
         var placements: [String] = []
         var written = 0
-        var alreadyApplied = 0
 
         for run in runs {
-            guard let start = locate(run, in: deviceBytes, base: baseBytes) else {
+            guard let placement = locate(run, in: deviceBytes, base: baseBytes) else {
                 log(
                     "patch: base offset \(run.lowerBound) is not anchored in the device asset — refusing to patch",
                     level: .warning
                 )
                 return nil
             }
+            let start = placement.start
             guard start >= 0, start + run.count <= deviceBytes.count else {
                 log(
                     "patch: device asset cannot hold base offset \(run.lowerBound) — refusing to patch",
                     level: .warning
                 )
                 return nil
-            }
-            // A newer game asset can already contain a value from the patch.
-            // Accept that run only when every byte exactly matches the package;
-            // any other divergence remains an incompatible-build failure.
-            if deviceBytes[start..<start + run.count].elementsEqual(patchedBytes[run]) {
-                alreadyApplied += run.count
-                placements.append("\(run.lowerBound)->\(start) (already applied)")
-                continue
             }
             for offset in 0..<run.count {
                 let target = start + offset
@@ -99,12 +91,12 @@ enum AssetShift {
                 deviceBytes[start + offset] = patchedBytes[run.lowerBound + offset]
                 written += 1
             }
-            placements.append("\(run.lowerBound)->\(start)")
+            placements.append("\(run.lowerBound)->\(start) [\(placement.detail)]")
         }
 
-        guard written > 0 || alreadyApplied > 0 else { return nil }
+        guard written > 0 else { return nil }
         log(
-            "patch: shifted \(written) byte(s), already present \(alreadyApplied) byte(s)"
+            "patch: shifted \(written) byte(s) into the device asset"
                 + " (\(placements.count) slot(s): \(placements.joined(separator: ", ")))",
             level: .info
         )
@@ -148,15 +140,28 @@ enum AssetShift {
         return runs
     }
 
-    /// Finds where `run` lives in the device build: the window of untouched
-    /// bytes that touches the run must occur exactly once there, and the run
-    /// itself follows that window. A unique 32–128 byte anchor makes a wrong
-    /// placement implausible, and the caller still proves every device byte.
+    private struct Placement {
+        let start: Int
+        let detail: String
+    }
+
+    /// Finds where `run` lives in the device build.
+    ///
+    /// A byte window next to the run is tried first, but serialized float
+    /// tables repeat the same `00 00 80 3f` patterns, so a 32–128 byte window
+    /// is usually *not* unique — which is exactly why the first apply failed.
+    /// The reliable anchor is the length-prefixed `bone_*` name that follows
+    /// each float triple: it is a stable field name across game builds. The
+    /// distance from the run to that name is fixed, so the same name (paired by
+    /// occurrence order when a rig appears twice) gives the device offset.
     private static func locate(
         _ run: Range<Int>,
         in device: [UInt8],
         base: [UInt8]
-    ) -> Int? {
+    ) -> Placement? {
+        if let semantic = semanticPlacement(run, in: device, base: base) {
+            return semantic
+        }
         for length in anchorLengths {
             // Anchor ending exactly where the run starts.
             if run.lowerBound >= length {
@@ -164,7 +169,7 @@ enum AssetShift {
                 if let match = uniqueMatch(of: base, in: device, at: anchor) {
                     let start = match + length
                     if start + run.count <= device.count {
-                        return start
+                        return Placement(start: start, detail: "byte window \(length) before")
                     }
                 }
             }
@@ -175,12 +180,89 @@ enum AssetShift {
                    match >= run.count {
                     let start = match - run.count
                     if start + run.count <= device.count {
-                        return start
+                        return Placement(start: start, detail: "byte window \(length) after")
                     }
                 }
             }
         }
         return nil
+    }
+
+    /// All `bone_<Name>` field markers in a serialized asset: the u32 length
+    /// prefix plus the name itself. Digits matter — `bone_Spine1` is one of
+    /// the edited slots and must not be skipped.
+    private static func boneMarkers(in asset: [UInt8]) -> [(range: Range<Int>, bytes: [UInt8])] {
+        var result: [(range: Range<Int>, bytes: [UInt8])] = []
+        let n = asset.count
+        var i = 0
+        while i + 5 <= n {
+            if asset[i] == 0x62, asset[i + 1] == 0x6f, asset[i + 2] == 0x6e,
+               asset[i + 3] == 0x65, asset[i + 4] == 0x5f { // "bone_"
+                var j = i + 5
+                while j < n {
+                    let c = asset[j]
+                    let fieldChar = (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a) ||
+                                    (c >= 0x61 && c <= 0x7a) || c == 0x5f
+                    if !fieldChar { break }
+                    j += 1
+                }
+                if j > i + 5, i >= 4 {
+                    let declared = Int(asset[i - 4]) | (Int(asset[i - 3]) << 8) |
+                                   (Int(asset[i - 2]) << 16) | (Int(asset[i - 1]) << 24)
+                    if declared == j - i {
+                        result.append((range: (i - 4)..<j, bytes: Array(asset[(i - 4)..<j])))
+                    }
+                }
+                i = j
+            } else {
+                i += 1
+            }
+        }
+        return result
+    }
+
+    private static func semanticPlacement(
+        _ run: Range<Int>,
+        in device: [UInt8],
+        base: [UInt8]
+    ) -> Placement? {
+        let markers = boneMarkers(in: base)
+        for marker in markers {
+            let triple = marker.range.lowerBound - 12 // three float32 values
+            guard triple >= 0 else { continue }
+            guard run.lowerBound >= triple, run.upperBound <= marker.range.lowerBound else { continue }
+
+            // A bone name can occur twice (male/female rigs). Pair occurrences
+            // by their order so each rig is patched at its own location.
+            let rank = markers.filter {
+                $0.bytes == marker.bytes && $0.range.lowerBound < marker.range.lowerBound
+            }.count
+            let occurrences = allMatches(of: marker.bytes, in: device)
+            guard rank < occurrences.count else { continue }
+
+            let deviceMarker = occurrences[rank]
+            let start = deviceMarker - 12 + (run.lowerBound - triple)
+            guard start >= 0, start + run.count <= device.count else { continue }
+            return Placement(start: start, detail: "bone anchor \(rank)")
+        }
+        return nil
+    }
+
+    private static func allMatches(
+        of needle: [UInt8],
+        in haystack: [UInt8]
+    ) -> [Int] {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return [] }
+        var result: [Int] = []
+        var start = 0
+        while start <= haystack.count - needle.count {
+            if haystack[start] == needle[0],
+               haystack[start..<start + needle.count].elementsEqual(needle) {
+                result.append(start)
+            }
+            start += 1
+        }
+        return result
     }
 
     /// Offset of the single occurrence of `base[anchor]` inside `device`, or
