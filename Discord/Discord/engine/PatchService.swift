@@ -286,7 +286,15 @@ enum PatchService {
                 renamedTo: nil
             )
 
-            if originalPath.contains("/contentcache/"), let current, current != blob {
+            // The avatar index is read by its hot-update name. Renaming the
+            // patched bytes to a new digest and rewriting `fileinfo` makes the
+            // game fetch its own copy again under the original name, so the
+            // patch never reaches the loaded asset. Write this asset in place
+            // and leave the manifest untouched: the float edits are small and
+            // the loader keeps reading the named file.
+            let isAvatarIndex = originalPath.contains("/gameassetbundles/avatar/assetindexer")
+            if originalPath.contains("/contentcache/"), !isAvatarIndex,
+               let current, current != blob {
                 let fileName = (originalPath as NSString).lastPathComponent
                 let directory = (originalPath as NSString).deletingLastPathComponent
                 if let newName = HotAssetName.name(for: blob, replacing: fileName, current: current) {
@@ -313,6 +321,9 @@ enum PatchService {
                 ) {
                     manifests.append(replacement)
                 }
+            } else if isAvatarIndex {
+                log("patch: \(originalPath) — writing the shifted floats in place, manifest unchanged",
+                    level: .info)
             }
             plans.append(plan)
         }
