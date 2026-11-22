@@ -22,22 +22,22 @@ ASSET = "Data/Raw/ios/gameassetbundles/avatar/assetindexer.tdn~2F53YNFWXQZyPdFl8
 TEXTURE = "Data/Raw/ios/optionalavatarres/gameassetbundles/"
 
 # (package name, payload file, destination, display name)
+# Titles and subtitles are taken verbatim from the dope 7.0 screenshots.
 ENTRIES = [
-    # Functions - the seven labels shown by dope
-    ("dope_hs_alto", "hs1", ASSET, "hs alto"),
+    # HS mode
+    ("dope_hs_pescoco", "hs1", ASSET, "hs pescoço"),
+    ("dope_hs_alto", "hs2", ASSET, "hs alto"),
     ("dope_hs_peito", "hs3", ASSET, "hs peito"),
-    ("dope_avatar", "original", ASSET, "avatar"),
+    # HS + ANTENA mode
     ("dope_hs_alto_antena", "hs2", ASSET, "hs alto + antena"),
+    ("dope_hs_pescoco_antena", "hs1", ASSET, "hs pescoço + antena"),
     ("dope_hs_barriga_antena", "hs3", ASSET, "hs barriga + antena"),
-    ("dope_barriga", "peito", ASSET, "barriga"),
-    ("dope_apenas_antena", "antenahand", ASSET, "apenas antena"),
-    # Matches - player-side files
-    ("dope_painel", "aim_config_bin", "Documents/config.bin", "painel"),
-    ("dope_aimbot_esp", "aim2_config_bin", "Documents/config.bin", "aimbot e esp"),
+    ("dope_antena_mao", "antenahand", ASSET, "antena na mão"),
+    # Partidas
+    ("dope_painel", "aim_Assembly-CSharp-patch_bytes", "Documents/Assembly-CSharp-patch.bytes", "painel"),
+    ("dope_aimbot_esp", "aim2_Assembly-CSharp-patch_bytes", "Documents/Assembly-CSharp-patch.bytes", "aimbot e esp"),
     ("dope_fps", "fps_com_dts_freefireth_plist", "Library/Preferences/com.dts.freefireth.plist", "120/144 fps"),
-    ("dope_assembly", "aim_Assembly-CSharp-patch_bytes", "Documents/Assembly-CSharp-patch.bytes", "assembly"),
-    ("dope_aimbot_esp2", "aim2_Assembly-CSharp-patch_bytes", "Documents/Assembly-CSharp-patch.bytes", "aimbot & esp"),
-    # Textures
+    # Texturas
     ("texture_sielzada", "sielzada", TEXTURE + "optionalab_avatar_62.o~2FELJ0~2BswGVk~2F~2BDPzjlpxie6x~2FA~3D", "textura sielzada"),
     ("texture_mordecai", "mordecai", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura mordecai"),
     ("texture_aranha", "spider", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura homem-aranha"),

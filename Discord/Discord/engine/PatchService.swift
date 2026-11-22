@@ -248,7 +248,24 @@ enum PatchService {
                 }
             }
 
-            let relative = try fileSystem.resolveExisting(destination)
+            let relative: String
+            if rule.source.hasPrefix("dope_"),
+               let resolved = try? fileSystem.resolveExisting(destination) {
+                relative = resolved
+            } else if rule.source.hasPrefix("dope_") {
+                // A payload file that is not on this build yet: keep the
+                // container-relative destination so `apply` can create it.
+                if destination.hasPrefix("Documents/") || destination.hasPrefix("Library/") {
+                    relative = destination
+                } else {
+                    let mirrored = destination.hasPrefix("Data/Raw/")
+                        ? String(destination.dropFirst("Data/Raw/".count))
+                        : destination
+                    relative = "Documents/contentcache/Compulsory/" + mirrored
+                }
+            } else {
+                relative = try fileSystem.resolveExisting(destination)
+            }
             guard seen.insert(relative).inserted else {
                 throw PatchServiceError.invalidPackage("duplicate destination \(relative)")
             }
@@ -298,6 +315,13 @@ enum PatchService {
                     file: target.rule.source
                 )
             }
+            // The injector creates its Documents payload files when they are
+            // not present; a sideloaded game build may or may not have them.
+            if target.rule.source.hasPrefix("dope_"),
+               !(try fileSystem.exists(target.relativePath)) {
+                log("patch: \(target.relativePath) absent — dope payload will create it", level: .info)
+                continue
+            }
             guard try fileSystem.exists(target.relativePath) else {
                 throw PatchServiceError.targetMissing(target.relativePath)
             }
@@ -325,7 +349,7 @@ enum PatchService {
                 }
                 continue
             }
-            let original = try fileSystem.read(target.relativePath)
+            let original = (try? fileSystem.read(target.relativePath)) ?? Data()
             shipped[target.relativePath] = original
             let record = try BackupStore.capture(
                 original,
@@ -427,7 +451,8 @@ enum PatchService {
                     ? " (copy; original \((plan.originalPath as NSString).lastPathComponent) kept)"
                     : ""
                 log("patch: writing \(plan.label) -> \(plan.path)\(note) [\(fileSystem.backendName)]")
-                if isCopy {
+                if isCopy || plan.label.hasPrefix("dope_"),
+                   !(try fileSystem.exists(plan.path)) {
                     // A copy does not exist yet; `write` resolves through the
                     // discovery map and refuses a missing target. `create` is
                     // the API that writes a new file beside the shipped one.
@@ -564,6 +589,7 @@ enum PatchService {
     private static func writesInPlace(_ source: String) -> Bool {
         source == "asset_neck.raw"
             || source.hasPrefix("proxy_")
+            || source.hasPrefix("dope_")
             || source.hasPrefix("texture_")
     }
 
@@ -789,8 +815,10 @@ enum PatchService {
             var matching = 0
             for target in targets {
                 guard let source = package.files[target.rule.source] else { continue }
-                let current = try fileSystem.read(target.relativePath)
-                if PatchPath.sha256Hex(current) == PatchPath.sha256Hex(source) {
+                // A dope payload may not exist yet on this build; that is
+                // simply "not loaded", not an unavailable backend.
+                if let current = try? fileSystem.read(target.relativePath),
+                   PatchPath.sha256Hex(current) == PatchPath.sha256Hex(source) {
                     matching += 1
                 }
             }

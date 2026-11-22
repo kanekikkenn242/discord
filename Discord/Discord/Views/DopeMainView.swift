@@ -107,15 +107,13 @@ private struct DopeFunctionsView: View {
     private var accent: Color { Color(hex: UInt32(accentHex)) }
 
     private var headshotProducts: [PatchProduct] {
-        FreeFireCatalog.products.filter {
-            $0.category == .aimbot && $0.tab == .avatar
-        }
-    }
-
-    private var playerProducts: [PatchProduct] {
-        FreeFireCatalog.products.filter {
-            $0.id == "aimbot_drag" || $0.id == "fps_120" || $0.id == "fps_144"
-        }
+        let hsIDs = ["dope_hs_pescoco", "dope_hs_alto", "dope_hs_peito"]
+        let antennaIDs = [
+            "dope_hs_alto_antena", "dope_hs_pescoco_antena",
+            "dope_hs_barriga_antena", "dope_antena_mao"
+        ]
+        let ids = mode == 0 ? hsIDs : antennaIDs
+        return ids.compactMap { FreeFireCatalog.product(id: $0) }
     }
 
     var body: some View {
@@ -136,7 +134,7 @@ private struct DopeFunctionsView: View {
                 VStack(spacing: 4) {
                     LiquidSegment(
                         values: [0, 1],
-                        title: { $0 == 0 ? DS.mode : "HS + ANTENA 2" },
+                        title: { $0 == 0 ? "HS" : "HS + ANTENA" },
                         selection: $mode
                     )
                     Text(DS.modeSubtitle)
@@ -165,28 +163,6 @@ private struct DopeFunctionsView: View {
                         ) { enabled in
                             state.setPatch(product, enabled: enabled)
                             toast = enabled ? DS.injected : DS.removed
-                        }
-                    }
-                }
-
-                Text(DS.textures)
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 4)
-
-                VStack(spacing: 9) {
-                    ForEach(Array(DS.textureNames.enumerated()), id: \.offset) { index, name in
-                        let textureProducts = FreeFireCatalog.products.filter { $0.category == .texture }
-                        let product = index < textureProducts.count ? textureProducts[index] : nil
-                        DopeTextureRow(
-                            name: name,
-                            product: product,
-                            status: product.map { patches.status(for: $0) },
-                            tint: accent
-                        ) { enabled in
-                            guard let product else { return }
-                            state.setPatch(product, enabled: enabled)
                         }
                     }
                 }
@@ -325,6 +301,24 @@ private struct DopeMatchesView: View {
 
                 VStack(spacing: 9) {
                     ForEach(FreeFireCatalog.products(for: .fps)) { product in
+                        DopeFunctionRow(
+                            product: product,
+                            status: patches.status(for: product),
+                            busy: patches.busyProductID == product.id
+                        ) { enabled in
+                            state.setPatch(product, enabled: enabled)
+                        }
+                    }
+                }
+
+                Text(DS.textures)
+                    .font(.system(size: 11, weight: .heavy))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+
+                VStack(spacing: 9) {
+                    ForEach(FreeFireCatalog.products(for: .texture)) { product in
                         DopeFunctionRow(
                             product: product,
                             status: patches.status(for: product),
