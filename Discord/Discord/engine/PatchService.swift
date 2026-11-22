@@ -238,8 +238,8 @@ enum PatchService {
                     for: "optionalab_avatar"
                 )
                 let best: (name: String, size: Int)?
-                if let referenced = candidates.first(where: { name in
-                    tokens.contains { token in name.contains(token) }
+                if let referenced = candidates.first(where: { candidate in
+                    tokens.contains { token in candidate.name.contains(token) }
                 }) {
                     best = referenced
                 } else {
