@@ -114,13 +114,13 @@ def seal(payload):
     return bytes(header) + ciphertext
 
 
-def build_payload(meta_name, files, rules):
+def build_payload(meta_name, files, rules, meta=None):
     digests = {name: hashlib.sha256(blob).hexdigest() for name, blob in files.items()}
     body = {
         "files": {name: base64.b64encode(blob).decode() for name, blob in files.items()},
         "rules": [{"src": src, "dst": dst} for src, dst in rules],
         "digests": digests,
-        "meta": {"name": meta_name},
+        "meta": {"name": meta_name, **(meta or {})},
     }
     return json.dumps(body, ensure_ascii=False).encode()
 

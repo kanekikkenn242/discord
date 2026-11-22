@@ -153,7 +153,7 @@ enum FreeFireCatalog {
             category: .aimbot,
             tab: .cache,
             slot: .cache,
-            packageNames: ["aimneck_cache"],
+            packageNames: ["aimneck_neck", "aimneck_cache"],
             badge: "SAFE",
             noteKey: nil
         ),

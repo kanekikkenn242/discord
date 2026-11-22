@@ -160,9 +160,28 @@ enum PatchService {
             let fields = line
                 .split(separator: ",", omittingEmptySubsequences: false)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            guard fields.count >= 5, !fields[4].isEmpty else { continue }
-            if let token = PatchPath.decodeBase64SHA1(fields[4]) {
-                return token
+            guard fields.count >= 5 else { continue }
+
+            // `{gz}` has to be the digest the stored file is named after, i.e.
+            // the gzip. The row carries two digest/size pairs and their order
+            // is not fixed between builds. The gzip's byte count is the smaller
+            // of the two, so it names the right pair; the digest is then the
+            // column just before that size. Reading a fixed column (the old
+            // code used 4) returns the raw digest on a build that stores them
+            // the other way round, the exact destination never exists, and the
+            // patch only lands by the name-prefix fallback — then the manifest
+            // repair writes the wrong column and the game re-downloads.
+            var preferred = 1
+            if fields.count > 5,
+               let first = Int(fields[2]),
+               let fifth = Int(fields[5]),
+               first > fifth {
+                preferred = 4
+            }
+            for index in [preferred, 1, 4] where index < fields.count {
+                if let token = PatchPath.decodeBase64SHA1(fields[index]) {
+                    return token
+                }
             }
         }
         return nil
@@ -337,8 +356,10 @@ enum PatchService {
                     current: current,
                     shipped: original,
                     patched: blob,
-                    patchedGzip: target.relativePath.contains("/cache_res")
-                        ? blob : (GzipData.compress(blob) ?? package.files[target.rule.source]),
+                    patchedStored: blob,
+                    patchedCounterpart: target.relativePath.contains("/cache_res")
+                        ? (GzipData.decompress(blob) ?? blob)
+                        : GzipData.compress(blob),
                     renamedFrom: plan.renamedTo == nil ? nil : fileName,
                     renamedTo: plan.renamedTo,
                     fileSystem: fileSystem
@@ -532,22 +553,22 @@ enum PatchService {
             return source
         }
 
-        // cache_res carries the hit colliders. The avatar index cannot change
-        // HEAD vs TORSO, so relocate the helper type fields by their serialized
-        // marker instead of by absolute offset. The comparison blob must be the
-        // raw asset, not the gzip variant (which has no readable fields).
-        let colliderReference = package.files["cache_res_raw.bin"]
-            ?? package.files.first(where: { $0.key.hasSuffix("_raw.bin") })?.value
-            ?? raw
+        // cache_res ships as a complete rebuilt UnityFS bundle: `cache_res_raw.bin`
+        // is the exact asset and `cache_res_mod.bin` is its gzip. The old path
+        // re-gzipped the device copy instead, which discarded every geometry
+        // edit the package carries and forced all 37 hit helpers to HEAD — the
+        // head capsule never moved, so a neck shot still resolved to TORSO.
+        // Write the packaged bytes verbatim and let CacheManifest describe both
+        // the raw and the gzip digest of the file the game will load.
         if target.relativePath.contains("/cache_res") {
-            let deviceRaw = GzipData.decompress(device) ?? device
-            let referenceRaw = GzipData.decompress(colliderReference) ?? colliderReference
-            if let shifted = ColliderShift.makeAllHead(in: deviceRaw, reference: referenceRaw),
-               let gzipped = GzipData.compress(shifted.0) {
-                log("patch: \(target.relativePath) — relabelled \(shifted.1) hit collider(s) as HEAD",
-                    level: .info)
-                return gzipped
+            if let packagedRaw = package.files["cache_res_raw.bin"]
+                ?? package.files.first(where: { $0.key.hasSuffix("_raw.bin") })?.value {
+                log(
+                    "patch: \(target.relativePath) — packaged cache_res bundle, \(packagedRaw.count) B raw",
+                    level: .info
+                )
             }
+            return source
         }
 
         guard let base = AssetShift.baseData(forByteCount: raw.count) ?? AssetShift.baseData() else {

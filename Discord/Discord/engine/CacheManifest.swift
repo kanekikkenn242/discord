@@ -50,7 +50,8 @@ enum CacheManifest {
         current: Data,
         shipped: Data?,
         patched: Data,
-        patchedGzip: Data? = nil,
+        patchedStored: Data? = nil,
+        patchedCounterpart: Data? = nil,
         renamedFrom: String? = nil,
         renamedTo: String? = nil,
         fileSystem: PatchFileSystem
@@ -104,36 +105,71 @@ enum CacheManifest {
             }
         }
 
-        // The row also carries the SHA-1 of the gzip representation (column 5).
-        // Leaving it at the original value makes the game consider the tree
-        // corrupt and re-download it, which is why the patch appeared to apply
-        // and then vanished. Replace it with the digest of the patched bytes.
-        if let gz = patchedGzip {
-            let newGz = PatchPath.sha1Base64(gz)
+        // The row carries two digest/size pairs: the bytes stored on disk (the
+        // file name is their digest) and the other representation of the same
+        // asset — the bundle the gzip expands to for `cache_res`, the gzip the
+        // raw avatar bundle was downloaded as for `assetindexer`. Their column
+        // order is not fixed between builds. Assuming column 4 was the gzip
+        // wrote the gzip digest into the raw column on a build that stores the
+        // pairs the other way round, so the row described a file that does not
+        // exist and the game re-downloaded the hotfix even though the patched
+        // bytes were on disk. Calibrate the pair from the current file instead:
+        // the byte count survives a recompression that changes the digest.
+        if let stored = patchedStored {
+            let newStored = PatchPath.sha1Base64(stored)
+            let currentStored = PatchPath.sha1Base64(current)
             let logical = (fileName(asset) as NSString).deletingPathExtension
                 .components(separatedBy: "~").first ?? fileName(asset)
             var lines = updated.components(separatedBy: .newlines)
             for (index, line) in lines.enumerated() where line.contains(logical) {
                 var fields = line.components(separatedBy: ",")
                 guard fields.count > 4 else { continue }
-                let old = fields[4].trimmingCharacters(in: .whitespaces)
+                func value(_ at: Int) -> String {
+                    at < fields.count ? fields[at].trimmingCharacters(in: .whitespaces) : ""
+                }
+                // Which pair describes the stored bytes? Prefer the size, then
+                // the digest, of both the stored bytes and the bundle they
+                // expand to; if the manifest records another compression of
+                // the same bundle, fall back to "the larger pair is the other".
+                let expanded = GzipData.decompress(current)
+                let expandedStored = expanded.map { PatchPath.sha1Base64($0) }
+                let storedIsFirst: Bool
+                if let size = Int(value(2)), size == current.count {
+                    storedIsFirst = true
+                } else if let size = Int(value(5)), size == current.count {
+                    storedIsFirst = false
+                } else if let expanded, let size = Int(value(2)), size == expanded.count {
+                    storedIsFirst = false
+                } else if let expanded, let size = Int(value(5)), size == expanded.count {
+                    storedIsFirst = true
+                } else if value(1) == currentStored {
+                    storedIsFirst = true
+                } else if value(4) == currentStored {
+                    storedIsFirst = false
+                } else if let expandedStored, value(1) == expandedStored {
+                    storedIsFirst = false
+                } else if let expandedStored, value(4) == expandedStored {
+                    storedIsFirst = true
+                } else {
+                    storedIsFirst = (Int(value(5)) ?? 0) >= (Int(value(2)) ?? 0)
+                }
+                let storedDigest = storedIsFirst ? 1 : 4
+                let storedSize = storedDigest + 1
+                let otherDigest = storedIsFirst ? 4 : 1
+                let otherSize = otherDigest + 1
                 var rowChanged = false
-                if old != newGz {
-                    fields[4] = newGz
-                    notes.append("gz/base64")
+                func set(_ at: Int, _ text: String, _ note: String) {
+                    guard at < fields.count else { return }
+                    guard fields[at].trimmingCharacters(in: .whitespaces) != text else { return }
+                    fields[at] = text
+                    notes.append(note)
                     rowChanged = true
                 }
-                // Column 5 is the gzip byte count. A recompressed asset rarely
-                // keeps the exact size, so leaving the shipped value makes the
-                // row inconsistent with the digest above it.
-                if fields.count > 5 {
-                    let oldSize = fields[5].trimmingCharacters(in: .whitespaces)
-                    let newSize = String(gz.count)
-                    if oldSize != newSize {
-                        fields[5] = newSize
-                        notes.append("gz/size")
-                        rowChanged = true
-                    }
+                set(storedDigest, newStored, "stored/base64")
+                set(storedSize, String(stored.count), "stored/size")
+                if let other = patchedCounterpart {
+                    set(otherDigest, PatchPath.sha1Base64(other), "other/base64")
+                    set(otherSize, String(other.count), "other/size")
                 }
                 guard rowChanged else { continue }
                 lines[index] = fields.joined(separator: ",")

@@ -426,13 +426,15 @@ Torso variants rewrite `HitDetectColliderHelper.ColliderType` from **2 → 1** o
 
 ### 8.2 `{gz}` resolution
 
-`cache_res` is versioned by the gzip SHA-1. `PatchTransaction` reads `cache_res.fileinfo` (from the container or via Airlift) and parses the line:
+`cache_res` is versioned by the SHA-1 of the bytes stored on disk (the gzip). `PatchTransaction` reads `cache_res.fileinfo` (from the container or via Airlift) and parses a line with two digest/size pairs:
 
 ```
-key, rawSHA1B64, rawSize, 0, gzSHA1B64, gzSize, True, 0
+key, sha1A_b64, sizeA, 0, sha1B_b64, sizeB, True, 0
 ```
 
-`{gz}` becomes the URL-escaped Base64 of the **gzip** SHA-1:
+One pair describes the stored file — that digest is the file-name token — and the other describes the alternate representation (the bundle the gzip expands to for `cache_res`, the gzip the raw avatar bundle was downloaded as for `assetindexer`). The order of the pairs is **not** fixed between builds: on the live Free Fire container the stored pair comes first. Do not read a fixed column; use the byte counts (the gzip is the smaller one) or check which digest actually names a file on disk. `PatchService.resolveCacheToken` and `CacheManifest.repair` both calibrate the pair from the row.
+
+`{gz}` becomes the URL-escaped Base64 of the **stored gzip** SHA-1:
 
 - `+` → `~2B`
 - `/` → `~2F`

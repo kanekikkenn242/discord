@@ -238,9 +238,29 @@ struct LocalPatchFileSystem: PatchFileSystem {
                 .appendingPathComponent("fileinfo")
             // The manifest row uses the logical name without the `.tdn`
             // extension (e.g. `avatar/assetindexer,...`), so match on the stem.
-            let recorded = Self.manifestToken(in: manifestURL.path, for: stem)
-            let preferred = recorded.flatMap { token in
-                matches.first { $0.contains(token) }
+            let recorded = Self.manifestTokens(in: manifestURL.path, for: stem)
+            var preferred: String?
+            for token in recorded {
+                // A file is normally named after its own digest, so the token
+                // is in the name. When the game re-compressed a copy the name
+                // and the manifest digest can disagree; hash each candidate
+                // before falling back to mtime, or a stale copy gets patched
+                // while the game keeps reading the manifest's choice.
+                if let byName = matches.first(where: { $0.contains(token) }) {
+                    preferred = byName
+                    break
+                }
+                for name in matches {
+                    let candidate = URL(fileURLWithPath: hotRoot)
+                        .appendingPathComponent(parent)
+                        .appendingPathComponent(name)
+                    guard let data = try? Data(contentsOf: candidate) else { continue }
+                    if PatchPath.escapeBase64Token(PatchPath.sha1Base64(data)) == token {
+                        preferred = name
+                        break
+                    }
+                }
+                if preferred != nil { break }
             }
             let match = preferred ?? matches.max { lhs, rhs in
                 modificationDate(directory, lhs) < modificationDate(directory, rhs)
@@ -262,21 +282,29 @@ struct LocalPatchFileSystem: PatchFileSystem {
         return nil
     }
 
-    /// The URL-escaped Base64 SHA-1 that `fileinfo` records for `logical`,
-    /// i.e. the digest of the copy Free Fire will load. The row format is not
-    /// parsed by column; a 28-character Base64 token on the row is enough.
-    private static func manifestToken(in path: String, for logical: String) -> String? {
+    /// The URL-escaped Base64 SHA-1s that `fileinfo` records for `logical`.
+    /// The row carries two digest/size pairs — the bytes stored on disk (the
+    /// file name is their digest) and the other representation — and their
+    /// order is not fixed between builds. Both digest columns are returned so
+    /// the caller can pick the one that names a file actually on disk; hashing
+    /// each candidate makes that check independent of the column order.
+    private static func manifestTokens(in path: String, for logical: String) -> [String] {
         guard let text = (try? String(contentsOfFile: path, encoding: .utf8))
-                ?? (try? String(contentsOfFile: path, encoding: .isoLatin1)) else { return nil }
+                ?? (try? String(contentsOfFile: path, encoding: .isoLatin1)) else { return [] }
         for line in text.components(separatedBy: .newlines) where line.contains(logical) {
-            for field in line.components(separatedBy: ",") {
-                let value = field.trimmingCharacters(in: .whitespaces)
-                if value.count == 28, value.hasSuffix("="), value.range(of: "[^A-Za-z0-9+/=]", options: .regularExpression) == nil {
-                    return PatchPath.escapeBase64Token(value)
+            let fields = line.components(separatedBy: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            var tokens: [String] = []
+            for index in [1, 4] where index < fields.count {
+                let value = fields[index]
+                if value.count == 28, value.hasSuffix("="),
+                   value.range(of: "[^A-Za-z0-9+/=]", options: .regularExpression) == nil {
+                    tokens.append(PatchPath.escapeBase64Token(value))
                 }
             }
+            if !tokens.isEmpty { return tokens }
         }
-        return nil
+        return []
     }
 
     private func modificationDate(_ directory: String, _ name: String) -> Date {
