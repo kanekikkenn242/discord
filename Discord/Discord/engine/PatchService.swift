@@ -335,7 +335,13 @@ enum PatchService {
                 renamedTo: nil
             )
 
-            if originalPath.contains("/contentcache/"), let current, current != blob {
+            // The working sideloaded injector overwrites `assetindexer` in
+            // place and never renames it or edits `fileinfo`. Free Fire resolves
+            // that asset by its original name, so a renamed copy plus a rewritten
+            // row is ignored even though the bytes verify on disk. The bone
+            // rename package follows that proven route: same name, new bytes.
+            if !Self.writesInPlace(target.rule.source),
+               originalPath.contains("/contentcache/"), let current, current != blob {
                 let fileName = (originalPath as NSString).lastPathComponent
                 let directory = (originalPath as NSString).deletingLastPathComponent
                 if let newName = HotAssetName.name(for: blob, replacing: fileName, current: current) {
@@ -527,6 +533,15 @@ enum PatchService {
         )
     }
 
+    /// Packages whose bytes go over the existing hot-update file without a
+    /// rename or a `fileinfo` edit. The sideloaded injector whose payload was
+    /// recovered in `Payload-2/InjectorApp.app` overwrites `assetindexer` in
+    /// place on iOS 27.0.1; Free Fire resolves that asset by its original name,
+    /// so a renamed copy plus a rewritten manifest row is ignored.
+    private static func writesInPlace(_ source: String) -> Bool {
+        source == "asset_neck.raw" || source.hasPrefix("proxy_")
+    }
+
     /// The blob to write for one resolved target. The hot-update trees store an
     /// asset as one raw file, while a package ships a gzip blob for the signed
     /// build and the raw one for the scratch copy, so the raw blob is used
@@ -571,13 +586,12 @@ enum PatchService {
             return source
         }
 
-        // A bone-name rename changes bytes *inside* the serialized `bone_*`
-        // field, not the float triple before it, so AssetShift's anchors cannot
-        // locate it. The package is built from the 46,096 B hot-update avatar
-        // this device loads, so its blob is written verbatim.
-        if target.rule.source == "asset_neck.raw" {
+        // These packages carry complete hot-update avatar blobs and must be
+        // written over the existing file, never diffed or recompressed. The
+        // working injector on iOS 27 does exactly this.
+        if Self.writesInPlace(target.rule.source) {
             log(
-                "patch: \(target.relativePath) — avatar bone rename, writing \(source.count) B verbatim",
+                "patch: \(target.relativePath) — writing \(source.count) B in place",
                 level: .info
             )
             return source

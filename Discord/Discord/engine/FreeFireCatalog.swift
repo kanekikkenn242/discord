@@ -137,12 +137,45 @@ enum FreeFireCatalog {
         ),
         PatchProduct(
             id: "aimneck_neck_asset",
-            titleKey: "product.hsNeck",
-            subtitleKey: "product.hsNeck.subtitle",
+            titleKey: "product.neckAsset",
+            subtitleKey: "product.neckAsset.subtitle",
             category: .aimbot,
             tab: .avatar,
             slot: .avatar,
             packageNames: ["aimneck_neck_asset"],
+            badge: "HS",
+            noteKey: nil
+        ),
+        PatchProduct(
+            id: "proxy_hs1",
+            titleKey: "product.proxyHs1",
+            subtitleKey: "product.proxyHs1.subtitle",
+            category: .aimbot,
+            tab: .avatar,
+            slot: .avatar,
+            packageNames: ["proxy_hs1"],
+            badge: "HS",
+            noteKey: nil
+        ),
+        PatchProduct(
+            id: "proxy_hs2",
+            titleKey: "product.proxyHs2",
+            subtitleKey: "product.proxyHs2.subtitle",
+            category: .aimbot,
+            tab: .avatar,
+            slot: .avatar,
+            packageNames: ["proxy_hs2"],
+            badge: "HS",
+            noteKey: nil
+        ),
+        PatchProduct(
+            id: "proxy_hs3",
+            titleKey: "product.proxyHs3",
+            subtitleKey: "product.proxyHs3.subtitle",
+            category: .aimbot,
+            tab: .avatar,
+            slot: .avatar,
+            packageNames: ["proxy_hs3"],
             badge: "HS",
             noteKey: nil
         ),
