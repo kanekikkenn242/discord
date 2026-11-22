@@ -164,11 +164,13 @@ Catalogue mapping in `engine/FreeFireCatalog.swift`:
 | AIM NECK CACHE | `aimneck_cache` | cache |
 | AIM TORSO | `aimtorso_cache` | cache |
 
-`HS KOKA` (`aimneck_hs`) renames the head bone to `bone_Neck` in both base rigs
-— the same nine-byte string, so the asset keeps its size and the change can be
-applied and fully restored. Turn it on while Free Fire sits on the loading
+`HS KOKA` (`aimneck_hs`) renames the head bone to `bone_Neck` and the pelvis
+bone `bone_Hips` to `bone_Head` in both rigs, from the 46,096-byte bundle the
+device actually loads (`patches/src/asset_avatar_device.raw`). Every name keeps
+its nine-byte length, so the asset keeps its size and the change applies and
+restores as a plain byte edit. Turn it on while Free Fire sits on the loading
 screen, then turn it off once the match has loaded: the on-disk asset goes back
-to the vanilla bytes.
+to the original bytes.
 
 `AIM PECHO 70%` is the panel label; the payload is `aimneck_torso_cache`
 (head capsule enlargement plus six torso helpers). The `70%` string is not in
