@@ -242,24 +242,24 @@ enum PatchService {
                         + "files=[\(candidates.map { "\($0.name)=\($0.size)" }.joined(separator: ", "))]",
                     level: .info
                 )
-                let best: (name: String, size: Int)?
-                if let referenced = candidates.first(where: { candidate in
-                    tokens.contains { token in candidate.name.contains(token) }
-                }) {
-                    best = referenced
-                } else {
-                    best = candidates.min(by: {
-                        abs($0.size - expected) < abs($1.size - expected)
-                    })
-                }
-                if let best {
-                    let path = directory + "/" + best.name
-                    log(
-                        "patch: \(rule.source) → \(best.name) (\(best.size) B, payload \(expected) B)",
-                        level: .info
-                    )
-                    if seen.insert(path).inserted {
-                        result.append((rule, path))
+                // The manifest on this build does not name any of the local
+                // avatar bundles (its digests describe a different
+                // representation), so there is no reliable way to know which
+                // one the game opens. The injector writes its payload over the
+                // exact dope-named file; here we write it over every local
+                // optionalab_avatar_* bundle, which guarantees whichever one
+                // the game loads is the modded texture.
+                if !candidates.isEmpty {
+                    for candidate in candidates {
+                        let path = directory + "/" + candidate.name
+                        log(
+                            "patch: \(rule.source) → \(candidate.name) "
+                                + "(\(candidate.size) B, payload \(expected) B)",
+                            level: .info
+                        )
+                        if seen.insert(path).inserted {
+                            result.append((rule, path))
+                        }
                     }
                     continue
                 }
