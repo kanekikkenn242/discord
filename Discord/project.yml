@@ -28,6 +28,10 @@ targets:
       # Bundle.main.url(forResource:withExtension:) finds them.
       - path: Discord/Patches
         buildPhase: resources
+      # Animated banners from the dope 7.0 injector, shown on the Functions
+      # and Info screens.
+      - path: Discord/Resources
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: Discord/Info.plist

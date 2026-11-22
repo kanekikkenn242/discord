@@ -35,7 +35,7 @@ struct DiscordApp: App {
                     .transition(.opacity)
 
                 case .main:
-                    MainTabView()
+                    DopeMainView()
                         .transition(.opacity)
                 }
             }
