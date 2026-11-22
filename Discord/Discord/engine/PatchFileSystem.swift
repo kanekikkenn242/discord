@@ -102,7 +102,14 @@ struct LocalPatchFileSystem: PatchFileSystem {
                     .appendingPathComponent(safe)
             )
         }
-        urls.append(URL(fileURLWithPath: rootPath).appendingPathComponent(safe))
+        // A bare `Data/Raw` tree inside the data container is never what the
+        // game loads; only the `.app` and the hot-update trees are. Keeping it
+        // as a candidate let a stale mirror win and the patch landed outside
+        // the `contentcache` path, so the rename and the manifest repair were
+        // skipped and Free Fire downloaded the original back.
+        if !safe.hasPrefix("Data/Raw/") {
+            urls.append(URL(fileURLWithPath: rootPath).appendingPathComponent(safe))
+        }
         return urls
     }
 
@@ -153,19 +160,39 @@ struct LocalPatchFileSystem: PatchFileSystem {
     /// access goes through the normal resolver.
     func resolveExisting(_ relativePath: String) throws -> String {
         let safe = try PatchPath.safeRelative(relativePath)
-        var candidates: [String] = []
-        if !safe.hasPrefix("Documents/") {
-            candidates.append("Documents/\(safe)")
-        }
-        candidates.append(safe)
-        for candidate in candidates where (try? exists(candidate)) == true {
-            return candidate
+        // The rule path is bundle-shaped (`Data/Raw/ios/...`) while the file is
+        // a hot-update asset under `Documents/contentcache/<category>/ios/...`.
+        // Returning the rule path for a file found through that mapping made
+        // the contentcache-only logic (rename + `fileinfo` repair) skip it, so
+        // always answer with the path the file really has in the container.
+        for url in candidateURLs(safe) where isExistingFile(url) {
+            guard let relative = containerRelative(url) else {
+                // Inside the `.app`; the rule path is the only name it has.
+                return safe
+            }
+            if relative != safe {
+                log(
+                    "patch: \(safe) resolves to \(relative) — the hot-update tree the game reads",
+                    level: .info
+                )
+            }
+            return relative
         }
         if let discovered = discoverHotUpdateFile(safe) {
             return discovered
         }
         log("patch: \(safe) is not on this device — \(describe(safe))", level: .warning)
         throw PatchServiceError.targetMissing(safe)
+    }
+
+    /// The container-relative form of a resolved URL, or nil when it lives in
+    /// the `.app` bundle (not addressable from the data container).
+    private func containerRelative(_ url: URL) -> String? {
+        let canonical = PatchPath.canonicalContainerPath(
+            (url.path as NSString).standardizingPath
+        )
+        guard canonical.hasPrefix(rootPath + "/") else { return nil }
+        return String(canonical.dropFirst(rootPath.count + 1))
     }
 
     private func discoverHotUpdateFile(_ safe: String) -> String? {
