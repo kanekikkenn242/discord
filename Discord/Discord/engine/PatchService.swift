@@ -225,6 +225,29 @@ enum PatchService {
                 }
             }
 
+            // The injector's texture URLs bake in an avatar index from an
+            // older build (`optionalab_avatar_62/66`). This device has `_46`
+            // and `_51`. Match the local bundle by byte size instead, so the
+            // payload lands on the file the game actually loads.
+            if rule.source.hasPrefix("texture_") {
+                let directory = "Documents/contentcache/Optional/ios/optionalavatarres/gameassetbundles"
+                let expected = package.files[rule.source]?.count ?? 0
+                let candidates = fileSystem.files(in: directory, prefix: "optionalab_avatar_")
+                if let best = candidates.min(by: {
+                    abs($0.size - expected) < abs($1.size - expected)
+                }) {
+                    let path = directory + "/" + best.name
+                    log(
+                        "patch: \(rule.source) → \(best.name) (\(best.size) B, payload \(expected) B)",
+                        level: .info
+                    )
+                    if seen.insert(path).inserted {
+                        result.append((rule, path))
+                    }
+                    continue
+                }
+            }
+
             let relative = try fileSystem.resolveExisting(destination)
             guard seen.insert(relative).inserted else {
                 throw PatchServiceError.invalidPackage("duplicate destination \(relative)")

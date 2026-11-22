@@ -24,6 +24,11 @@ protocol PatchFileSystem {
     func replaceWithNewName(_ newName: String, data: Data, at relativePath: String) throws -> String
     /// Writes a file that does not exist yet, inside a directory that does.
     func create(_ data: Data, at relativePath: String) throws
+    /// Files in a container directory whose name starts with `prefix`, with
+    /// their byte counts. Hot-update indices change between game builds, so a
+    /// texture payload is matched to the local bundle by size, not by the
+    /// index baked into the injector's URL.
+    func files(in relativeDirectory: String, prefix: String) -> [(name: String, size: Int)]
 }
 
 extension PatchFileSystem {
@@ -36,6 +41,10 @@ extension PatchFileSystem {
 
     func create(_ data: Data, at relativePath: String) throws {
         throw PatchServiceError.noAccess("\(backendName) cannot create \(relativePath)")
+    }
+
+    func files(in relativeDirectory: String, prefix: String) -> [(name: String, size: Int)] {
+        []
     }
 
     /// The package rules are container-relative and may target either
@@ -367,6 +376,20 @@ struct LocalPatchFileSystem: PatchFileSystem {
             throw PatchServiceError.targetMissing((safe as NSString).deletingLastPathComponent)
         }
         try data.write(to: url, options: .atomic)
+    }
+
+    func files(in relativeDirectory: String, prefix: String) -> [(name: String, size: Int)] {
+        let safe = (try? PatchPath.safeRelative(relativeDirectory)) ?? relativeDirectory
+        let directory = URL(fileURLWithPath: rootPath).appendingPathComponent(safe).path
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []
+        var result: [(name: String, size: Int)] = []
+        for name in names where name.hasPrefix(prefix) {
+            let path = (directory as NSString).appendingPathComponent(name)
+            let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+            guard let size = attributes?[.size] as? NSNumber else { continue }
+            result.append((name, size.intValue))
+        }
+        return result.sorted { $0.name < $1.name }
     }
 }
 
