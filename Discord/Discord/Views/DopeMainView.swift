@@ -307,7 +307,6 @@ private struct DopeTextureRow: View {
 private struct DopeMatchesView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var patches: PatchController
-    @State private var switches = Array(repeating: false, count: DS.functionNames.count)
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -316,7 +315,7 @@ private struct DopeMatchesView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(DS.matches)
                             .font(.system(size: 22, weight: .heavy, design: .rounded))
-                        Text(DS.functionNames[1])
+                        Text("aimbot e esp")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -324,23 +323,8 @@ private struct DopeMatchesView: View {
                     DopeStatusHUD(text: state.selectedGame.displayName)
                 }
 
-                ForEach(Array(DS.functionNames.enumerated()), id: \.offset) { index, name in
-                    HStack(spacing: 12) {
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.orange)
-                            .frame(width: 26)
-                        Text(name)
-                            .font(.system(size: 13, weight: .semibold))
-                        Spacer()
-                        GlassSwitch(isOn: $switches[index])
-                    }
-                    .padding(13)
-                    .dopeGlass(radius: 16)
-                }
-
                 VStack(spacing: 9) {
-                    ForEach(FreeFireCatalog.products.filter { $0.category == .fps }) { product in
+                    ForEach(FreeFireCatalog.products(for: .fps)) { product in
                         DopeFunctionRow(
                             product: product,
                             status: patches.status(for: product),

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dope</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      font-family: Arial, sans-serif;
+    }
+
+    .dope {
+      font-size: 32px;
+      font-weight: 400;
+      color: #000;
+      letter-spacing: 1px;
+      margin-bottom: 18px;
+    }
+
+    .pill {
+      width: 180px;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="dope">dope</div>
+  <img class="pill" src="pill.png" alt="">
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"c6a3fe4e9a6a40c08cb265ffe20be57a","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>

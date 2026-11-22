@@ -91,6 +91,126 @@ struct PatchProduct: Identifiable, Equatable {
 
 enum FreeFireCatalog {
     static let products: [PatchProduct] = [
+        // Funções — the exact seven rows and payloads from dope 7.0.
+        PatchProduct(
+            id: "dope_hs_alto",
+            titleKey: "dope.fn.hsAlto",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_hs_alto"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_hs_peito",
+            titleKey: "dope.fn.hsPeito",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_hs_peito"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_avatar",
+            titleKey: "dope.fn.avatar",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_avatar"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_hs_alto_antena",
+            titleKey: "dope.fn.hsAltoAntena",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_hs_alto_antena"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_hs_barriga_antena",
+            titleKey: "dope.fn.hsBarrigaAntena",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_hs_barriga_antena"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_barriga",
+            titleKey: "dope.fn.barriga",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_barriga"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_apenas_antena",
+            titleKey: "dope.fn.apenasAntena",
+            subtitleKey: "dope.empty",
+            category: .aimbot, tab: .avatar, slot: .avatar,
+            packageNames: ["dope_apenas_antena"], badge: nil, noteKey: nil
+        ),
+
+        // Partidas — the five player-side rows from dope 7.0.
+        PatchProduct(
+            id: "dope_painel",
+            titleKey: "dope.fn.painel",
+            subtitleKey: "dope.empty",
+            category: .fps, tab: nil, slot: .fps,
+            packageNames: ["dope_painel"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_aimbot_esp",
+            titleKey: "dope.fn.aimbotEsp",
+            subtitleKey: "dope.empty",
+            category: .fps, tab: nil, slot: .fps,
+            packageNames: ["dope_aimbot_esp"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_fps",
+            titleKey: "dope.fn.fps",
+            subtitleKey: "dope.empty",
+            category: .fps, tab: nil, slot: .fps,
+            packageNames: ["dope_fps"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_assembly",
+            titleKey: "dope.fn.assembly",
+            subtitleKey: "dope.empty",
+            category: .fps, tab: nil, slot: .fps,
+            packageNames: ["dope_assembly"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "dope_aimbot_esp2",
+            titleKey: "dope.fn.aimbotEsp2",
+            subtitleKey: "dope.empty",
+            category: .fps, tab: nil, slot: .fps,
+            packageNames: ["dope_aimbot_esp2"], badge: nil, noteKey: nil
+        ),
+
+        // TEXTURAS — four payloads, mutually exclusive slot.
+        PatchProduct(
+            id: "texture_sielzada",
+            titleKey: "dope.tex.sielzada",
+            subtitleKey: "dope.empty",
+            category: .texture, tab: nil, slot: .texture,
+            packageNames: ["texture_sielzada"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "texture_mordecai",
+            titleKey: "dope.tex.mordecai",
+            subtitleKey: "dope.empty",
+            category: .texture, tab: nil, slot: .texture,
+            packageNames: ["texture_mordecai"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "texture_aranha",
+            titleKey: "dope.tex.aranha",
+            subtitleKey: "dope.empty",
+            category: .texture, tab: nil, slot: .texture,
+            packageNames: ["texture_aranha"], badge: nil, noteKey: nil
+        ),
+        PatchProduct(
+            id: "texture_alienx",
+            titleKey: "dope.tex.alienx",
+            subtitleKey: "dope.empty",
+            category: .texture, tab: nil, slot: .texture,
+            packageNames: ["texture_alienx"], badge: nil, noteKey: nil
+        )
+    ]
+
+    private static let legacyProducts: [PatchProduct] = [
         PatchProduct(
             id: "aimbot_drag",
             titleKey: "product.aimbotDrag",

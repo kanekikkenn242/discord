@@ -1,0 +1,68 @@
+"""Build the exact option set shipped by the dope 7.0 injector.
+
+Every payload is the byte-for-byte file that Payload-2/InjectorApp.app
+downloads from https://dp2.shardweb.app/... . The packages write files in
+place; the injector never renames a file or edits fileinfo.
+
+Run:  python tools/build_dope_catalog.py
+"""
+
+import hashlib
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from build_avatar_3105 import OUT, build_payload, open_package, seal  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PAYLOADS = os.path.join(HERE, "dope_payloads")
+
+ASSET = "Data/Raw/ios/gameassetbundles/avatar/assetindexer.tdn~2F53YNFWXQZyPdFl8HWBBwtXk~3D"
+TEXTURE = "Data/Raw/ios/optionalavatarres/gameassetbundles/"
+
+# (package name, payload file, destination, display name)
+ENTRIES = [
+    # Functions - the seven labels shown by dope
+    ("dope_hs_alto", "hs1", ASSET, "hs alto"),
+    ("dope_hs_peito", "hs3", ASSET, "hs peito"),
+    ("dope_avatar", "original", ASSET, "avatar"),
+    ("dope_hs_alto_antena", "hs2", ASSET, "hs alto + antena"),
+    ("dope_hs_barriga_antena", "hs3", ASSET, "hs barriga + antena"),
+    ("dope_barriga", "peito", ASSET, "barriga"),
+    ("dope_apenas_antena", "antenahand", ASSET, "apenas antena"),
+    # Matches - player-side files
+    ("dope_painel", "aim_config_bin", "Documents/config.bin", "painel"),
+    ("dope_aimbot_esp", "aim2_config_bin", "Documents/config.bin", "aimbot e esp"),
+    ("dope_fps", "fps_com_dts_freefireth_plist", "Library/Preferences/com.dts.freefireth.plist", "120/144 fps"),
+    ("dope_assembly", "aim_Assembly-CSharp-patch_bytes", "Documents/Assembly-CSharp-patch.bytes", "assembly"),
+    ("dope_aimbot_esp2", "aim2_Assembly-CSharp-patch_bytes", "Documents/Assembly-CSharp-patch.bytes", "aimbot & esp"),
+    # Textures
+    ("texture_sielzada", "sielzada", TEXTURE + "optionalab_avatar_62.o~2FELJ0~2BswGVk~2F~2BDPzjlpxie6x~2FA~3D", "textura sielzada"),
+    ("texture_mordecai", "mordecai", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura mordecai"),
+    ("texture_aranha", "spider", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura homem-aranha"),
+    ("texture_alienx", "alienx", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura alien-x"),
+]
+
+
+def main():
+    for name, payload, destination, display in ENTRIES:
+        source = name + ".raw"
+        raw = open(os.path.join(PAYLOADS, payload), "rb").read()
+        body = build_payload(
+            display,
+            {source: raw},
+            [(source, destination)],
+            meta={"rawLength": len(raw), "compressed": False},
+        )
+        out = os.path.join(OUT, name + ".3105")
+        with open(out, "wb") as handle:
+            handle.write(seal(body))
+        _, decoded = open_package(open(out, "rb").read())
+        if decoded != {source: raw}:
+            raise SystemExit(f"{out}: round-trip failed")
+        print(f"{name:24s} {display:24s} {len(raw):8d} B  {hashlib.sha256(raw).hexdigest()[:12]}")
+
+
+if __name__ == "__main__":
+    main()
