@@ -91,7 +91,42 @@ struct PatchProduct: Identifiable, Equatable {
 
 enum FreeFireCatalog {
     static let products: [PatchProduct] = [
-        // Cosmetic-only: no hitbox, aim or gameplay files are modified.
+        // FUNÇÕES - HS mode (the three rows shown by dope 7.0)
+        PatchProduct(id: "dope_hs_pescoco", titleKey: "dope.fn.hsPescoco", subtitleKey: "dope.sub.avatar",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_hs_pescoco"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_hs_alto", titleKey: "dope.fn.hsAlto", subtitleKey: "dope.sub.avatar",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_hs_alto"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_hs_peito", titleKey: "dope.fn.hsPeito", subtitleKey: "dope.sub.avatar",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_hs_peito"], badge: nil, noteKey: nil),
+        // HS + ANTENA mode
+        PatchProduct(id: "dope_hs_alto_antena", titleKey: "dope.fn.hsAltoAntena", subtitleKey: "dope.sub.pescocoAltoLados",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_hs_alto_antena"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_hs_pescoco_antena", titleKey: "dope.fn.hsPescocoAntena", subtitleKey: "dope.sub.pescocoLados",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_hs_pescoco_antena"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_hs_barriga_antena", titleKey: "dope.fn.hsBarrigaAntena", subtitleKey: "dope.sub.barriga",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_hs_barriga_antena"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_antena_mao", titleKey: "dope.fn.antenaMao", subtitleKey: "dope.sub.apenasAntena",
+                     category: .aimbot, tab: .avatar, slot: .avatar,
+                     packageNames: ["dope_antena_mao"], badge: nil, noteKey: nil),
+
+        // PARTIDAS
+        PatchProduct(id: "dope_painel", titleKey: "dope.fn.painel", subtitleKey: "dope.sub.assembly",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["dope_painel"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_aimbot_esp", titleKey: "dope.fn.aimbotEsp", subtitleKey: "dope.sub.assembly",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["dope_aimbot_esp"], badge: nil, noteKey: nil),
+        PatchProduct(id: "dope_fps", titleKey: "dope.fn.fps", subtitleKey: "dope.sub.fpsLimit",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["dope_fps"], badge: nil, noteKey: nil),
+
+        // TEXTURAS
         PatchProduct(id: "texture_sielzada", titleKey: "dope.tex.sielzada", subtitleKey: "dope.sub.santino",
                      category: .texture, tab: nil, slot: .texture,
                      packageNames: ["texture_sielzada"], badge: nil, noteKey: nil),

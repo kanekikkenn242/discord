@@ -135,49 +135,6 @@ final class PatchController: ObservableObject {
         }
     }
 
-    /// Puts every applied file back to its shipped bytes. Used by Safe mode.
-    func restoreAll(game: FreeFireGame, allowKernel: Bool) {
-        guard busyProductID == nil else { return }
-        retryTask?.cancel()
-        retryTask = nil
-        busyProductID = "restoreAll"
-        lastError = nil
-        let bundleID = game.rawValue
-        Task.detached(priority: .userInitiated) {
-            defer {
-                Task { @MainActor [weak self] in
-                    self?.busyProductID = nil
-                    self?.refresh(game: game)
-                }
-            }
-            do {
-                try PatchRuntime.withFileSystem(game: game, allowKernel: allowKernel) { fileSystem in
-                    for product in FreeFireCatalog.products {
-                        guard AppliedTargetsStore.load(
-                            productID: product.id, bundleID: bundleID
-                        ) != nil else { continue }
-                        let package = FreeFireCatalog.packageURL(for: product)
-                            .flatMap { try? PatchPackage.load(from: $0) }
-                        do {
-                            try PatchService.restore(
-                                product: product,
-                                bundleID: bundleID,
-                                package: package,
-                                fileSystem: fileSystem
-                            )
-                            log("ui: safe mode restored \(product.id)", level: .success)
-                        } catch {
-                            log("ui: safe mode could not restore \(product.id) — \(error.localizedDescription)",
-                                level: .warning)
-                        }
-                    }
-                }
-            } catch {
-                log("ui: safe mode backend unavailable — \(error.localizedDescription)", level: .warning)
-            }
-        }
-    }
-
     func setEnabled(
         _ enabled: Bool,
         product: PatchProduct,

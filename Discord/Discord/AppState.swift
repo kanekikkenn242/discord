@@ -150,10 +150,6 @@ final class AppState: ObservableObject {
         patches.refresh(game: selectedGame)
     }
 
-    func restoreAllPatches() {
-        patches.restoreAll(game: selectedGame, allowKernel: kernelApplicable)
-    }
-
     func runKernelExploit() {
         guard !kernelRunning else { return }
         kernelRunning = true
