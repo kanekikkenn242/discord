@@ -7,7 +7,7 @@ struct DiscordApp: App {
 
     init() {
         setupLogCapture()
-        log("app: Discord launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machine)")
+        log("app: dope launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machine)")
     }
 
     var body: some Scene {

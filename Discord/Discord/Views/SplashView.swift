@@ -33,7 +33,7 @@ struct SplashView: View {
                     AppTile(size: 84, letter: "D")
                 }
 
-                Text("Discord")
+                Text("dope")
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.top, 18)

@@ -233,9 +233,21 @@ enum PatchService {
                 let directory = "Documents/contentcache/Optional/ios/optionalavatarres/gameassetbundles"
                 let expected = package.files[rule.source]?.count ?? 0
                 let candidates = fileSystem.files(in: directory, prefix: "optionalab_avatar_")
-                if let best = candidates.min(by: {
-                    abs($0.size - expected) < abs($1.size - expected)
+                let tokens = fileSystem.manifestTokens(
+                    at: "Documents/contentcache/Optional/ios/optionalavatarres/fileinfo",
+                    for: "optionalab_avatar"
+                )
+                let best: (name: String, size: Int)?
+                if let referenced = candidates.first(where: { name in
+                    tokens.contains { token in name.contains(token) }
                 }) {
+                    best = referenced
+                } else {
+                    best = candidates.min(by: {
+                        abs($0.size - expected) < abs($1.size - expected)
+                    })
+                }
+                if let best {
                     let path = directory + "/" + best.name
                     log(
                         "patch: \(rule.source) → \(best.name) (\(best.size) B, payload \(expected) B)",

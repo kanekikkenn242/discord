@@ -80,24 +80,18 @@ extension View {
 
 struct AppTile: View {
     var size: CGFloat = 52
-    var letter: String = "D"
+    var letter: String = "D" // kept for call sites; the dope logo replaces it
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [Theme.orange, Theme.orange.opacity(0.72)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                Text(letter)
-                    .font(.system(size: size * 0.5, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-            )
+        Image("DopeLogo")
+            .resizable()
+            .scaledToFit()
             .frame(width: size, height: size)
-            .shadow(color: Theme.orange.opacity(0.25), radius: size * 0.18, y: size * 0.08)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+            )
             .accessibilityHidden(true)
     }
 }

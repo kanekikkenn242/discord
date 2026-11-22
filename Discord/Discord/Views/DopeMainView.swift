@@ -7,6 +7,7 @@ import SwiftUI
 struct DopeMainView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var patches: PatchController
+    @Environment(\.t) private var t
     @AppStorage("dope.selectedBanner") private var banner = "dope1black.gif"
     @State private var tab: DopeTab = .functions
     @State private var showBannerPicker = false
@@ -44,10 +45,20 @@ struct DopeMainView: View {
                 DopeLoginGate(isPresented: $showGate)
             }
         }
+        .overlay {
+            if let busy = patches.busyProductID {
+                DopeProcessDialog(name: displayName(for: busy))
+            }
+        }
         .onAppear {
             state.refreshPatches()
             showGate = !state.activation.isActivated
         }
+    }
+
+    private func displayName(for id: String) -> String {
+        guard let product = FreeFireCatalog.product(id: id) else { return id }
+        return t(product.titleKey)
     }
 }
 
@@ -653,6 +664,57 @@ private struct DopeLoginGate: View {
             .padding(24)
             .dopeGlass(radius: 22)
             .padding(.horizontal, 24)
+        }
+    }
+}
+
+// MARK: - Process dialog (the exact log lines the injector shows)
+
+private struct DopeProcessDialog: View {
+    let name: String
+    @State private var step = 0
+
+    private let steps = [
+        "Verificando compatibilidade do dispositivo...",
+        "Preparando %@...",
+        "Baixando e validando o arquivo...",
+        "Gravando no destino selecionado...",
+        "Liberando recursos..."
+    ]
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.68).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    ProgressView().tint(.orange)
+                    Text("Injetando \(name)")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                ForEach(0..<min(step + 1, steps.count), id: \.self) { index in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(index + 1).")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.orange)
+                        Text(String(format: steps[index], name))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .dopeGlass(radius: 20)
+            .padding(.horizontal, 28)
+        }
+        .onAppear {
+            guard step < steps.count else { return }
+            Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { timer in
+                DispatchQueue.main.async {
+                    if step < steps.count - 1 { step += 1 }
+                    else { timer.invalidate() }
+                }
+            }
         }
     }
 }

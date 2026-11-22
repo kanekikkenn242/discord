@@ -83,7 +83,7 @@ struct HomeView: View {
                 AppTile(size: 52)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Discord")
+                    Text("dope")
                         .font(.system(size: 20, weight: .bold))
                     Text(t("home.subtitle"))
                         .font(.system(size: 12))

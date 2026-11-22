@@ -29,6 +29,10 @@ protocol PatchFileSystem {
     /// texture payload is matched to the local bundle by size, not by the
     /// index baked into the injector's URL.
     func files(in relativeDirectory: String, prefix: String) -> [(name: String, size: Int)]
+    /// Digest tokens recorded in a hot-update `fileinfo` for a logical asset.
+    /// The file whose name carries one of these tokens is the one the game
+    /// actually loads.
+    func manifestTokens(at relativePath: String, for logical: String) -> [String]
 }
 
 extension PatchFileSystem {
@@ -44,6 +48,10 @@ extension PatchFileSystem {
     }
 
     func files(in relativeDirectory: String, prefix: String) -> [(name: String, size: Int)] {
+        []
+    }
+
+    func manifestTokens(at relativePath: String, for logical: String) -> [String] {
         []
     }
 
@@ -390,6 +398,14 @@ struct LocalPatchFileSystem: PatchFileSystem {
             result.append((name, size.intValue))
         }
         return result.sorted { $0.name < $1.name }
+    }
+
+    func manifestTokens(at relativePath: String, for logical: String) -> [String] {
+        let safe = (try? PatchPath.safeRelative(relativePath)) ?? relativePath
+        return Self.manifestTokens(
+            in: URL(fileURLWithPath: rootPath).appendingPathComponent(safe).path,
+            for: logical
+        )
     }
 }
 
