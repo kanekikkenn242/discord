@@ -539,7 +539,9 @@ enum PatchService {
     /// place on iOS 27.0.1; Free Fire resolves that asset by its original name,
     /// so a renamed copy plus a rewritten manifest row is ignored.
     private static func writesInPlace(_ source: String) -> Bool {
-        source == "asset_neck.raw" || source.hasPrefix("proxy_")
+        source == "asset_neck.raw"
+            || source.hasPrefix("proxy_")
+            || source.hasPrefix("texture_")
     }
 
     /// The blob to write for one resolved target. The hot-update trees store an
