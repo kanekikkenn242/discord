@@ -16,8 +16,13 @@ capsule but keeps it centred on the skull (male centre.x = -0.0402,
 height = 0.150), so a shot at the neck still misses the volume.
 
 The capsule's local X axis points down the body, so the fix is to lengthen it
-along -X and move the centre down. The edit is a same-size float write, which
-keeps the UnityFS block table and object table valid.
+along -X and move the centre down. Unity's `m_Height` is the TOTAL length
+including the two spherical caps, so the cylinder segment runs from
+`centre.x ± (height/2 - radius)`; the neck point must be within `radius` of
+that segment, not merely within `height/2`. With the values below the segment
+is exactly [-0.240, 0.000] and both rigs' neck points are 0.027–0.059 away,
+inside the 0.08 radius, while the head bone origin stays inside too. The edit
+is a same-size float write, which keeps the UnityFS block/object tables valid.
 
 Run:  python tools/build_neck_cache.py
 """
@@ -49,15 +54,18 @@ DISPLAY = "HS Qafa"
 RADIUS_OFFSET = 44
 HEIGHT_OFFSET = 48
 CENTER_X_OFFSET = 56
+CENTER_Y_OFFSET = 60
+CENTER_Z_OFFSET = 64
 
-# The stock capsule spans local X [-0.115, +0.035]. The neck sits at
-# head-local x ≈ -0.24 (y ≈ 0.07–0.10), just below the skull. A 0.28 total
-# height centred at -0.105 spans [-0.245, +0.035], so the neck falls inside the
-# cylinder instead of only inside the end cap, and a 0.105 radius clears its
-# offset from the capsule axis without swallowing the chest.
-NECK_RADIUS = 0.105
-NECK_HEIGHT = 0.280
-NECK_CENTER_X = -0.105
+# Head-local neck points measured from the bundle: (-0.2397, 0.0988, 0) and
+# (-0.2437, 0.0672, 0); the head bone origin is (0, 0, 0). A capsule centred at
+# x=-0.12 with height 0.40 and radius 0.08 has its cylinder segment on
+# [-0.240, 0.000], so both the neck points and the skull sit within the radius.
+NECK_RADIUS = 0.080
+NECK_HEIGHT = 0.400
+NECK_CENTER_X = -0.120
+NECK_CENTER_Y = 0.040
+NECK_CENTER_Z = 0.000
 
 RULES = [
     ("cache_res_mod.bin", "Data/Raw/ios/gameassetbundles/cache_res.{gz}"),
@@ -111,6 +119,8 @@ def patch(raw):
         struct.pack_into("<f", data, at + RADIUS_OFFSET, NECK_RADIUS)
         struct.pack_into("<f", data, at + HEIGHT_OFFSET, NECK_HEIGHT)
         struct.pack_into("<f", data, at + CENTER_X_OFFSET, NECK_CENTER_X)
+        struct.pack_into("<f", data, at + CENTER_Y_OFFSET, NECK_CENTER_Y)
+        struct.pack_into("<f", data, at + CENTER_Z_OFFSET, NECK_CENTER_Z)
     return bytes(data)
 
 
@@ -134,17 +144,20 @@ def verify(raw):
             continue
         radius = tree["m_Radius"]
         height = tree["m_Height"]
-        center_x = tree["m_Center"]["x"]
+        center = tree["m_Center"]
         print(
             f"  bone_Head capsule: r={radius:.6f} h={height:.6f} "
-            f"center.x={center_x:.6f}"
+            f"center=({center['x']:.6f},{center['y']:.6f},{center['z']:.6f})"
         )
-        if abs(radius - NECK_RADIUS) > 1e-5:
-            raise SystemExit("radius did not land")
-        if abs(height - NECK_HEIGHT) > 1e-5:
-            raise SystemExit("height did not land")
-        if abs(center_x - NECK_CENTER_X) > 1e-5:
-            raise SystemExit("center did not land")
+        for label, actual, expected in (
+            ("radius", radius, NECK_RADIUS),
+            ("height", height, NECK_HEIGHT),
+            ("center.x", center["x"], NECK_CENTER_X),
+            ("center.y", center["y"], NECK_CENTER_Y),
+            ("center.z", center["z"], NECK_CENTER_Z),
+        ):
+            if abs(actual - expected) > 1e-5:
+                raise SystemExit(f"{label} did not land: {actual} != {expected}")
         seen += 1
     if seen != 2:
         raise SystemExit(f"verified {seen} capsules, expected 2")
