@@ -216,6 +216,49 @@ enum RenamedTargetsStore {
     }
 }
 
+/// The `fileinfo` rows a patch rewrote, stored per product so status can tell a
+/// live game rewrite from its own edit and restore can undo only its own rows.
+struct ManifestRowRecord: Codable, Equatable {
+    let manifest: String
+    let key: String
+    let original: String
+    let patched: String
+}
+
+enum ManifestRowsStore {
+    private static func key(productID: String, bundleID: String) -> String {
+        "discord.manifestRows.\(bundleID).\(productID)"
+    }
+
+    private static var encoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
+    static func save(_ rows: [ManifestRowRecord], productID: String, bundleID: String) {
+        let defaults = UserDefaults.standard
+        guard !rows.isEmpty,
+              let data = try? encoder.encode(rows),
+              let text = String(data: data, encoding: .utf8) else {
+            defaults.removeObject(forKey: key(productID: productID, bundleID: bundleID))
+            return
+        }
+        defaults.set(text, forKey: key(productID: productID, bundleID: bundleID))
+    }
+
+    static func load(productID: String, bundleID: String) -> [ManifestRowRecord] {
+        guard let text = UserDefaults.standard.string(
+            forKey: key(productID: productID, bundleID: bundleID)
+        ), let data = text.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([ManifestRowRecord].self, from: data)) ?? []
+    }
+
+    static func clear(productID: String, bundleID: String) {
+        UserDefaults.standard.removeObject(forKey: key(productID: productID, bundleID: bundleID))
+    }
+}
+
 enum AppliedTargetsStore {
     private static func key(productID: String, bundleID: String) -> String {
         "discord.appliedTargets.\(bundleID).\(productID)"

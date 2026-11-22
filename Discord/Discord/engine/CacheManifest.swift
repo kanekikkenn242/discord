@@ -19,6 +19,16 @@ enum CacheManifest {
         let path: String
         let data: Data
         let summary: String
+        /// The rows this repair changed, keyed by their first column. Several
+        /// patches share one `fileinfo`, so restore has to put back only its
+        /// own rows; writing the whole backup would erase another product's.
+        let rows: [RowChange]
+    }
+
+    struct RowChange {
+        let key: String
+        let original: String
+        let patched: String
     }
 
     /// The manifest that lists `asset`, e.g.
@@ -156,8 +166,89 @@ enum CacheManifest {
         }
 
         let summary = notes.joined(separator: ", ")
+        let rows = changedRows(before: text, after: updated)
         log("patch: \(manifest) — updated \(summary)", level: .info)
-        return Replacement(path: manifest, data: Data(updated.utf8), summary: summary)
+        return Replacement(
+            path: manifest,
+            data: Data(updated.utf8),
+            summary: summary,
+            rows: rows
+        )
+    }
+
+    // MARK: - Row tracking
+
+    /// The row identity is its first column: `avatar/assetindexer`, `cache_res`
+    /// or whatever the manifest uses. Digests are only replaced inside rows, so
+    /// the line count is unchanged and rows can be compared by position.
+    private static func rowKey(_ line: String) -> String {
+        line.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? ""
+    }
+
+    private static func changedRows(before: String, after: String) -> [RowChange] {
+        let oldLines = before.components(separatedBy: "\n")
+        let newLines = after.components(separatedBy: "\n")
+        guard oldLines.count == newLines.count else { return [] }
+        var rows: [RowChange] = []
+        for index in oldLines.indices where oldLines[index] != newLines[index] {
+            let key = rowKey(oldLines[index])
+            guard !key.isEmpty else { continue }
+            rows.append(
+                RowChange(key: key, original: oldLines[index], patched: newLines[index])
+            )
+        }
+        return rows
+    }
+
+    /// True while the manifest still records the patched values this app wrote.
+    /// Free Fire rewrites `fileinfo` on launch; a row that no longer matches is
+    /// the only reliable sign that the patch is gone.
+    static func rowsIntact(
+        _ rows: [RowChange],
+        in manifest: String,
+        fileSystem: PatchFileSystem
+    ) -> Bool {
+        guard let raw = try? fileSystem.read(manifest),
+              let text = String(data: raw, encoding: .utf8)
+                ?? String(data: raw, encoding: .isoLatin1) else {
+            return false
+        }
+        let lines = text.components(separatedBy: "\n")
+        for row in rows {
+            let present = lines.contains { line in
+                line == row.patched && rowKey(line) == row.key
+            }
+            if !present { return false }
+        }
+        return true
+    }
+
+    /// Puts back only this patch's rows, leaving every other row (and another
+    /// patch's values) untouched. Returns false when nothing had to change.
+    @discardableResult
+    static func restoreRows(
+        _ rows: [RowChange],
+        in manifest: String,
+        fileSystem: PatchFileSystem
+    ) throws -> Bool {
+        guard try fileSystem.exists(manifest) else { return false }
+        let raw = try fileSystem.read(manifest)
+        guard let text = String(data: raw, encoding: .utf8)
+                ?? String(data: raw, encoding: .isoLatin1) else {
+            return false
+        }
+        var lines = text.components(separatedBy: "\n")
+        var changed = false
+        for row in rows {
+            guard let index = lines.firstIndex(where: {
+                $0 == row.patched && rowKey($0) == row.key
+            }) else { continue }
+            lines[index] = row.original
+            changed = true
+        }
+        guard changed else { return false }
+        try fileSystem.write(Data(lines.joined(separator: "\n").utf8), to: manifest)
+        return true
     }
 
     // MARK: - Digests

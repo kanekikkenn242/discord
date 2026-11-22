@@ -466,6 +466,25 @@ enum PatchService {
             productID: product.id,
             bundleID: bundleID
         )
+        // Record the manifest rows this apply wrote. Status compares them with
+        // the live `fileinfo` instead of guessing from a file name, and restore
+        // puts back only these rows so a second patch's row survives.
+        let manifestRows = manifests.flatMap { manifest in
+            manifest.rows.map {
+                ManifestRowRecord(
+                    manifest: manifest.path,
+                    key: $0.key,
+                    original: $0.original,
+                    patched: $0.patched
+                )
+            }
+        }
+        // A repair that found the manifest already patched returns no rows; do
+        // not drop the rows a previous apply recorded, or status loses its only
+        // way to tell a live rewrite from its own edit.
+        if !manifestRows.isEmpty {
+            ManifestRowsStore.save(manifestRows, productID: product.id, bundleID: bundleID)
+        }
         let paths = targets.map { $0.relativePath } + manifests.map { $0.path }
         AppliedTargetsStore.save(paths, productID: product.id, bundleID: bundleID)
         appendLedger(
@@ -597,7 +616,21 @@ enum PatchService {
 
         var restored: [String] = []
         do {
+            let recorded = ManifestRowsStore.load(productID: product.id, bundleID: bundleID)
             for path in paths {
+                // Several patches share one `fileinfo`. Writing the backup back
+                // wholesale erases every other patch's row, so the manifest is
+                // restored row by row whenever this app recorded its own rows.
+                if (path as NSString).lastPathComponent == "fileinfo",
+                   recorded.contains(where: { $0.manifest == path }) {
+                    let rows = recorded
+                        .filter { $0.manifest == path }
+                        .map { CacheManifest.RowChange(key: $0.key, original: $0.original, patched: $0.patched) }
+                    _ = try? CacheManifest.restoreRows(rows, in: path, fileSystem: fileSystem)
+                    log("patch: restored the \(rows.count) row(s) this patch wrote in \(path)", level: .info)
+                    restored.append(path)
+                    continue
+                }
                 let original = try BackupStore.read(
                     bundleID: bundleID,
                     relativePath: backupKey(for: path)
@@ -632,6 +665,7 @@ enum PatchService {
 
         AppliedTargetsStore.clear(productID: product.id, bundleID: bundleID)
         RenamedTargetsStore.clear(productID: product.id, bundleID: bundleID)
+        ManifestRowsStore.clear(productID: product.id, bundleID: bundleID)
         appendLedger(
             action: "restore",
             product: product,
@@ -725,6 +759,20 @@ enum PatchService {
         // exists, still differs from the shipped bytes, and the manifest still
         // points at it. Free Fire re-downloads its own copy on launch and
         // rewrites `fileinfo`, so a file that merely exists is not enough.
+        //
+        // Compare the rows this app wrote, not the file-name token: a manifest
+        // that records only digests never contains the token, and reading that
+        // as "replaced" made every status pass restore and rewrite the asset.
+        let recorded = ManifestRowsStore.load(productID: productID, bundleID: bundleID)
+        for manifest in Set(recorded.map { $0.manifest }) {
+            let rows = recorded
+                .filter { $0.manifest == manifest }
+                .map { CacheManifest.RowChange(key: $0.key, original: $0.original, patched: $0.patched) }
+            if !CacheManifest.rowsIntact(rows, in: manifest, fileSystem: fileSystem) {
+                return false
+            }
+        }
+
         for rename in renames {
             guard let applied = try? fileSystem.read(rename.applied),
                   let original = try? BackupStore.read(
@@ -734,20 +782,6 @@ enum PatchService {
                 return false
             }
             if applied == original { return false }
-
-            if let manifest = CacheManifest.manifestPath(for: rename.applied),
-               let raw = try? fileSystem.read(manifest),
-               let text = String(data: raw, encoding: .utf8)
-                   ?? String(data: raw, encoding: .isoLatin1),
-               let leaf = rename.applied.components(separatedBy: "/").last,
-               let dot = leaf.firstIndex(of: ".") {
-                let escapedToken = String(leaf[leaf.index(after: dot)...])
-                let token = escapedToken
-                    .replacingOccurrences(of: "~2B", with: "+")
-                    .replacingOccurrences(of: "~2F", with: "/")
-                    .replacingOccurrences(of: "~3D", with: "=")
-                if !token.isEmpty && !text.contains(token) { return false }
-            }
             checked += 1
         }
         return checked > 0
