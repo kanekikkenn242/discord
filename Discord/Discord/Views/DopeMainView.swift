@@ -142,41 +142,31 @@ private struct DopeFunctionsView: View {
                     .font(.system(size: 20, weight: .heavy, design: .rounded))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(spacing: 4) {
-                    LiquidSegment(
-                        values: [0, 1],
-                        title: { $0 == 0 ? "HS" : "HS + ANTENA" },
-                        selection: $mode
-                    )
-                    Text(DS.modeSubtitle)
-                        .font(.system(size: 9))
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "hand.raised.fill")
+                            .foregroundStyle(.green)
+                        Text("dope.safe.title")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    Text("dope.safe.subtitle")
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                HStack {
-                    Text(DS.overlay)
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    GlassSwitch(isOn: $overlay, tint: accent)
-                }
-                .padding(.horizontal, 14)
-                .frame(height: 48)
-                .dopeGlass(radius: 16)
-
-                VStack(spacing: 9) {
-                    ForEach(headshotProducts) { product in
-                        DopeFunctionRow(
-                            product: product,
-                            status: patches.status(for: product),
-                            busy: patches.busyProductID == product.id,
-                            tint: accent
-                        ) { enabled in
-                            state.setPatch(product, enabled: enabled)
-                            toast = enabled ? DS.injected : DS.removed
-                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        state.restoreAllPatches()
+                        toast = "dope.safe.restored"
+                    } label: {
+                        Text("dope.restoreAll")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 38)
+                            .dopeGlass(radius: 12)
                     }
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .dopeGlass(radius: 16)
 
                 Text(t("home.footer"))
                     .font(.system(size: 9))
@@ -188,7 +178,7 @@ private struct DopeFunctionsView: View {
         }
         .overlay(alignment: .top) {
             if let toast {
-                Text(toast)
+                Text(t(toast))
                     .font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -294,6 +284,7 @@ private struct DopeTextureRow: View {
 private struct DopeMatchesView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var patches: PatchController
+    @Environment(\.t) private var t
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -302,9 +293,10 @@ private struct DopeMatchesView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(DS.matches)
                             .font(.system(size: 22, weight: .heavy, design: .rounded))
-                        Text("aimbot e esp")
-                            .font(.system(size: 11))
+                        Text(t("dope.safe.subtitle"))
+                            .font(.system(size: 10))
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
                     Spacer()
                     DopeStatusHUD(text: state.selectedGame.displayName)
