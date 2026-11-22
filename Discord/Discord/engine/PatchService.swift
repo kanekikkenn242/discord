@@ -550,7 +550,7 @@ enum PatchService {
             }
         }
 
-        guard let base = AssetShift.baseData() else {
+        guard let base = AssetShift.baseData(forByteCount: raw.count) ?? AssetShift.baseData() else {
             log(
                 "patch: shipped avatar base is missing — writing \(target.rule.source) as is",
                 level: .warning

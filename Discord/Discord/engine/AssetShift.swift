@@ -14,6 +14,10 @@ import Foundation
 /// proven to equal the base. When no anchor is unique nothing is written.
 enum AssetShift {
     static let baseResource = "asset_avatar_base"
+    /// The hot-update avatar build (46,096 B). A package made from it carries
+    /// blobs of that size, and diffing those against the shipped 46,640 B base
+    /// fails the size guard before any byte is compared.
+    static let deviceBaseResource = "asset_avatar_base_device"
     static let baseExtension = "raw"
 
     /// Longest run that is still treated as a field edit. A float vector is a
@@ -31,6 +35,18 @@ enum AssetShift {
             return nil
         }
         return try? Data(contentsOf: url)
+    }
+
+    /// The bundled base that matches the package's own blob size, so a package
+    /// built from the hot-update avatar is diffed against that same build.
+    static func baseData(forByteCount count: Int) -> Data? {
+        for name in [deviceBaseResource, baseResource] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: baseExtension),
+                  let data = try? Data(contentsOf: url),
+                  data.count == count else { continue }
+            return data
+        }
+        return nil
     }
 
     /// Returns the device asset with only the bytes the patch changed.
