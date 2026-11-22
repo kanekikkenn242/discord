@@ -125,6 +125,17 @@ enum FreeFireCatalog {
             noteKey: nil
         ),
         PatchProduct(
+            id: "aimneck_hs",
+            titleKey: "product.hsNeck",
+            subtitleKey: "product.hsNeck.subtitle",
+            category: .aimbot,
+            tab: .avatar,
+            slot: .avatar,
+            packageNames: ["aimneck_hs"],
+            badge: "HS",
+            noteKey: "product.hsNeck.note"
+        ),
+        PatchProduct(
             id: "aimneck_torso_cache",
             titleKey: "product.aimPecho",
             subtitleKey: "product.aimPecho.subtitle",

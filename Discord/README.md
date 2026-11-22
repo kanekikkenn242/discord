@@ -159,9 +159,16 @@ Catalogue mapping in `engine/FreeFireCatalog.swift`:
 | AIMBOT DRAG | `aimbot_drag` | avatar |
 | AIM NECK + ANTENNA | `aimdrag_neck` | avatar |
 | AIM DRAG NECK | `aimneck_90` | avatar |
+| HS KOKA | `aimneck_hs` | avatar |
 | AIM PECHO 70% | `aimneck_torso_cache` | cache |
 | AIM NECK CACHE | `aimneck_cache` | cache |
 | AIM TORSO | `aimtorso_cache` | cache |
+
+`HS KOKA` (`aimneck_hs`) renames the head bone to `bone_Neck` in both base rigs
+— the same nine-byte string, so the asset keeps its size and the change can be
+applied and fully restored. Turn it on while Free Fire sits on the loading
+screen, then turn it off once the match has loaded: the on-disk asset goes back
+to the vanilla bytes.
 
 `AIM PECHO 70%` is the panel label; the payload is `aimneck_torso_cache`
 (head capsule enlargement plus six torso helpers). The `70%` string is not in

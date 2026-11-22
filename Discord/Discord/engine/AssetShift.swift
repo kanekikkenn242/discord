@@ -41,16 +41,10 @@ enum AssetShift {
         let patchedBytes = [UInt8](patched)
         var deviceBytes = [UInt8](device)
 
-        // The hit classifier reads the serialized field name, not the float
-        // scale. Enlarging the neck alone still registers a body hit, so the
-        // neck is relabelled as the head: `bone_Neck` and `bone_Head` are both
-        // nine bytes, which keeps the serialized offsets intact. Both rigs
-        // (male/female) are relabelled.
-        let relabelled = relabelNeckAsHead(in: &deviceBytes)
-        if relabelled > 0 {
-            log("patch: relabelled \(relabelled) neck bone field(s) as head — neck hits register as headshots",
-                level: .info)
-        }
+        // The hit classifier reads the serialized field name. A package may
+        // carry that rename itself (`aimneck_hs` writes `bone_Head` as
+        // `bone_Neck`), so nothing is relabelled here: doing it at apply time
+        // would rewrite the package's own names back and cancel the patch.
 
         let runs = changedRuns(patchedBytes, against: baseBytes)
         guard !runs.isEmpty else { return nil }
