@@ -7,6 +7,7 @@ final class PatchController: ObservableObject {
     @Published private(set) var busyProductID: String?
     @Published private(set) var backend: String = "not available"
     @Published private(set) var lastError: String?
+    @Published private(set) var exportNote: String?
 
     private var refreshInFlight = false
     private var retryTask: Task<Void, Never>?
@@ -237,6 +238,80 @@ final class PatchController: ObservableObject {
                     self.busyProductID = nil
                     self.lastError = full
                     self.statuses[productID] = .unavailable(message)
+                }
+            }
+        }
+    }
+
+    /// Copies the avatar bundle the game is actually reading into this app's
+    /// own Documents folder (visible in Files), so the exact build on the
+    /// device can be inspected instead of guessed from the shipped base.
+    func exportAvatarAsset(game: FreeFireGame) {
+        guard busyProductID == nil else { return }
+
+        busyProductID = "export.avatar"
+        lastError = nil
+        exportNote = nil
+
+        Task.detached(priority: .userInitiated) {
+            do {
+                let written = try PatchRuntime.withFileSystem(
+                    game: game,
+                    allowKernel: false
+                ) { fileSystem -> [String] in
+                    guard let product = FreeFireCatalog.products.first(where: {
+                        $0.slot == .avatar && FreeFireCatalog.hasPackage(for: $0)
+                    }), let url = FreeFireCatalog.packageURL(for: product) else {
+                        throw PatchServiceError.packageMissing("avatar")
+                    }
+                    let package = try PatchPackage.load(from: url)
+                    let targets = try PatchService.resolvedRules(
+                        package: package,
+                        bundleID: game.rawValue,
+                        fileSystem: fileSystem
+                    )
+                    let directory = FileManager.default
+                        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        .appendingPathComponent("export", isDirectory: true)
+                    try FileManager.default.createDirectory(
+                        at: directory,
+                        withIntermediateDirectories: true
+                    )
+
+                    var names: [String] = []
+                    for target in targets {
+                        let data = try fileSystem.read(target.relativePath)
+                        let name = (target.relativePath as NSString).lastPathComponent + ".bin"
+                        try data.write(
+                            to: directory.appendingPathComponent(name),
+                            options: .atomic
+                        )
+                        names.append("\(name) (\(data.count) B)")
+                        log(
+                            "patch: exported \(target.relativePath) — \(data.count) B, "
+                                + "sha256 \(PatchPath.sha256Hex(data).prefix(16))",
+                            level: .success
+                        )
+                    }
+                    return names
+                }
+
+                await MainActor.run {
+                    self.busyProductID = nil
+                    self.exportNote = written.joined(separator: ", ")
+                    log(
+                        "ui: avatar asset exported — Files › Discord › export › \(self.exportNote ?? "")",
+                        level: .success
+                    )
+                }
+            } catch {
+                let message = Self.short(error)
+                let full = Self.full(error)
+                log("ui: export failed — \(full)", level: .error)
+                await MainActor.run {
+                    self.busyProductID = nil
+                    self.lastError = full
+                    self.exportNote = message
                 }
             }
         }

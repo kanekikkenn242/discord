@@ -20,6 +20,14 @@ struct GameView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 header
+
+                if let note = patches.exportNote {
+                    Text("Documents/export — \(note)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 categoryChips
                 remoteCard
 
@@ -133,6 +141,10 @@ struct GameView: View {
                 Text(t("game.packages"))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
+            }
+
+            CircleIconButton(systemName: "square.and.arrow.up", tint: Theme.textSecondary) {
+                patches.exportAvatarAsset(game: state.selectedGame)
             }
 
             CircleIconButton(systemName: "square.and.arrow.down", tint: Theme.textSecondary) {
