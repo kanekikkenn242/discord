@@ -237,6 +237,11 @@ enum PatchService {
                     at: "Documents/contentcache/Optional/ios/optionalavatarres/fileinfo",
                     for: "optionalab_avatar"
                 )
+                log(
+                    "patch: optionalavatarres fileinfo tokens=[\(tokens.joined(separator: ", "))] "
+                        + "files=[\(candidates.map { "\($0.name)=\($0.size)" }.joined(separator: ", "))]",
+                    level: .info
+                )
                 let best: (name: String, size: Int)?
                 if let referenced = candidates.first(where: { candidate in
                     tokens.contains { token in candidate.name.contains(token) }
