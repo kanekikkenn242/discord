@@ -571,6 +571,18 @@ enum PatchService {
             return source
         }
 
+        // A bone-name rename changes bytes *inside* the serialized `bone_*`
+        // field, not the float triple before it, so AssetShift's anchors cannot
+        // locate it. The package is built from the 46,096 B hot-update avatar
+        // this device loads, so its blob is written verbatim.
+        if target.rule.source == "asset_neck.raw" {
+            log(
+                "patch: \(target.relativePath) — avatar bone rename, writing \(source.count) B verbatim",
+                level: .info
+            )
+            return source
+        }
+
         guard let base = AssetShift.baseData(forByteCount: raw.count) ?? AssetShift.baseData() else {
             log(
                 "patch: shipped avatar base is missing — writing \(target.rule.source) as is",
