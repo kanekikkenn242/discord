@@ -98,7 +98,7 @@ private enum DS {
     static let functionNames = ["painel", "aimbot e esp", "120/144 fps", "assembly", "aimbot & esp"]
     static let textureNames = [
         "textura sielzada", "textura mordecai", "textura homem-aranha",
-        "textura alien-x", "textura kaneki", "personagem santino", "personagem alok despertado"
+        "textura alien-x", "textura kaneki", "textura baji keisuke", "personagem santino", "personagem alok despertado"
     ]
 }
 
