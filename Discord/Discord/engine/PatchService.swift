@@ -262,6 +262,9 @@ enum PatchService {
             if rule.source.hasPrefix("texture_") {
                 let logical = ((destination as NSString).lastPathComponent as NSString)
                     .components(separatedBy: ".").first ?? ""
+                for note in fileSystem.textureDiagnostics(logical: logical) {
+                    log("patch: textura \(logical) — \(note)", level: .info)
+                }
                 for copy in fileSystem.matchingFiles(prefix: logical) where seen.insert(copy.path).inserted {
                     log(
                         "patch: \(rule.source) also writes cached copy \(copy.path) (\(copy.size) B)",

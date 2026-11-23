@@ -38,6 +38,10 @@ protocol PatchFileSystem {
     /// `Library/Caches/<bundle id>`. Free Fire can load a bundle from a cache
     /// copy instead of the contentcache original.
     func matchingFiles(prefix: String) -> [(path: String, size: Int)]
+
+    /// Raw `fileinfo` rows and cache entries for a texture bundle. Used only
+    /// for diagnostics when the game ignores a byte-verified texture patch.
+    func textureDiagnostics(logical: String) -> [String]
 }
 
 extension PatchFileSystem {
@@ -61,6 +65,10 @@ extension PatchFileSystem {
     }
 
     func matchingFiles(prefix: String) -> [(path: String, size: Int)] {
+        []
+    }
+
+    func textureDiagnostics(logical: String) -> [String] {
         []
     }
 
@@ -449,6 +457,29 @@ struct LocalPatchFileSystem: PatchFileSystem {
             }
         }
         return result
+    }
+
+    func textureDiagnostics(logical: String) -> [String] {
+        var notes: [String] = []
+        let manifest = "Documents/contentcache/Optional/ios/optionalavatarres/fileinfo"
+        let path = URL(fileURLWithPath: rootPath).appendingPathComponent(manifest).path
+        if let text = (try? String(contentsOfFile: path, encoding: .utf8))
+            ?? (try? String(contentsOfFile: path, encoding: .isoLatin1)) {
+            for line in text.components(separatedBy: .newlines) where line.contains(logical) {
+                notes.append("fileinfo: \(line)")
+            }
+        }
+        let caches = hotRoots.filter { $0.contains("Library/Caches") }
+        for cache in caches {
+            for tail in ["", "gameassetbundles", "ios/gameassetbundles",
+                         "ios/optionalavatarres/gameassetbundles"] {
+                let directory = (cache as NSString).appendingPathComponent(tail)
+                let names = (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []
+                guard !names.isEmpty else { continue }
+                notes.append("\(directory): \(names.sorted().prefix(16).joined(separator: ", "))")
+            }
+        }
+        return notes
     }
 }
 
