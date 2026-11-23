@@ -276,3 +276,28 @@ enum AppliedTargetsStore {
         UserDefaults.standard.removeObject(forKey: key(productID: productID, bundleID: bundleID))
     }
 }
+
+/// Files the injector created because they were not on the device yet — e.g.
+/// the on-demand `optionalab_avatar_62/66` texture bundles. There is no shipped
+/// original to back up for those, so a restore deletes them instead.
+enum CreatedTargetsStore {
+    private static func key(productID: String, bundleID: String) -> String {
+        "discord.createdTargets.\(bundleID).\(productID)"
+    }
+
+    static func save(_ paths: [String], productID: String, bundleID: String) {
+        if paths.isEmpty {
+            clear(productID: productID, bundleID: bundleID)
+        } else {
+            UserDefaults.standard.set(paths, forKey: key(productID: productID, bundleID: bundleID))
+        }
+    }
+
+    static func load(productID: String, bundleID: String) -> [String] {
+        UserDefaults.standard.stringArray(forKey: key(productID: productID, bundleID: bundleID)) ?? []
+    }
+
+    static func clear(productID: String, bundleID: String) {
+        UserDefaults.standard.removeObject(forKey: key(productID: productID, bundleID: bundleID))
+    }
+}

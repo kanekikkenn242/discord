@@ -225,51 +225,18 @@ enum PatchService {
                 }
             }
 
-            // The injector's texture URLs bake in an avatar index from an
-            // older build (`optionalab_avatar_62/66`). This device has `_46`
-            // and `_51`. Match the local bundle by byte size instead, so the
-            // payload lands on the file the game actually loads.
-            if rule.source.hasPrefix("texture_") {
-                let directory = "Documents/contentcache/Optional/ios/optionalavatarres/gameassetbundles"
-                let expected = package.files[rule.source]?.count ?? 0
-                let candidates = fileSystem.files(in: directory, prefix: "optionalab_avatar_")
-                let tokens = fileSystem.manifestTokens(
-                    at: "Documents/contentcache/Optional/ios/optionalavatarres/fileinfo",
-                    for: "optionalab_avatar"
-                )
-                log(
-                    "patch: optionalavatarres fileinfo tokens=[\(tokens.joined(separator: ", "))] "
-                        + "files=[\(candidates.map { "\($0.name)=\($0.size)" }.joined(separator: ", "))]",
-                    level: .info
-                )
-                // The manifest on this build does not name any of the local
-                // avatar bundles (its digests describe a different
-                // representation), so there is no reliable way to know which
-                // one the game opens. The injector writes its payload over the
-                // exact dope-named file; here we write it over every local
-                // optionalab_avatar_* bundle, which guarantees whichever one
-                // the game loads is the modded texture.
-                if !candidates.isEmpty {
-                    for candidate in candidates {
-                        let path = directory + "/" + candidate.name
-                        log(
-                            "patch: \(rule.source) → \(candidate.name) "
-                                + "(\(candidate.size) B, payload \(expected) B)",
-                            level: .info
-                        )
-                        if seen.insert(path).inserted {
-                            result.append((rule, path))
-                        }
-                    }
-                    continue
-                }
-            }
+            // dope's texture rows use content-addressed names (`_62`, `_66`).
+            // Those files are downloaded on demand and are often absent until
+            // the matching character is equipped. Like the injector, write the
+            // exact name and create it when needed — never spray the payload
+            // over unrelated `optionalab_avatar_*` bundles.
+            let createsIfMissing = Self.writesInPlace(rule.source)
 
             let relative: String
-            if rule.source.hasPrefix("dope_"),
+            if createsIfMissing,
                let resolved = try? fileSystem.resolveExisting(destination) {
                 relative = resolved
-            } else if rule.source.hasPrefix("dope_") {
+            } else if createsIfMissing {
                 // A payload file that is not on this build yet: keep the
                 // container-relative destination so `apply` can create it.
                 if destination.hasPrefix("Documents/") || destination.hasPrefix("Library/") {
@@ -334,9 +301,9 @@ enum PatchService {
             }
             // The injector creates its Documents payload files when they are
             // not present; a sideloaded game build may or may not have them.
-            if target.rule.source.hasPrefix("dope_"),
+            if Self.writesInPlace(target.rule.source),
                !(try fileSystem.exists(target.relativePath)) {
-                log("patch: \(target.relativePath) absent — dope payload will create it", level: .info)
+                log("patch: \(target.relativePath) absent — payload will create it", level: .info)
                 continue
             }
             guard try fileSystem.exists(target.relativePath) else {
@@ -366,7 +333,12 @@ enum PatchService {
                 }
                 continue
             }
-            let original = (try? fileSystem.read(target.relativePath)) ?? Data()
+            guard let original = try? fileSystem.read(target.relativePath) else {
+                // No shipped copy exists (on-demand texture bundle). Applying
+                // creates it; restore removes it through CreatedTargetsStore.
+                log("patch: no shipped copy for \(backupKey) — will create it", level: .info)
+                continue
+            }
             shipped[target.relativePath] = original
             let record = try BackupStore.capture(
                 original,
@@ -450,6 +422,7 @@ enum PatchService {
         }
 
         var attempted: [AppliedWrite] = []
+        var createdPaths: [String] = []
         do {
             for plan in plans {
                 var applied = AppliedWrite(
@@ -468,12 +441,13 @@ enum PatchService {
                     ? " (copy; original \((plan.originalPath as NSString).lastPathComponent) kept)"
                     : ""
                 log("patch: writing \(plan.label) -> \(plan.path)\(note) [\(fileSystem.backendName)]")
-                if isCopy || plan.label.hasPrefix("dope_"),
-                   !(try fileSystem.exists(plan.path)) {
-                    // A copy does not exist yet; `write` resolves through the
-                    // discovery map and refuses a missing target. `create` is
-                    // the API that writes a new file beside the shipped one.
+                let targetExists = try fileSystem.exists(plan.path)
+                if (isCopy || Self.writesInPlace(plan.label)) && !targetExists {
+                    // A copy or an on-demand texture bundle does not exist yet;
+                    // `write` resolves through the discovery map and refuses a
+                    // missing target. `create` writes the new file in place.
                     try fileSystem.create(plan.data, at: plan.path)
+                    createdPaths.append(plan.path)
                 } else {
                     try fileSystem.write(plan.data, to: plan.path)
                 }
@@ -579,6 +553,7 @@ enum PatchService {
         }
         let paths = targets.map { $0.relativePath } + manifests.map { $0.path }
         AppliedTargetsStore.save(paths, productID: product.id, bundleID: bundleID)
+        CreatedTargetsStore.save(createdPaths, productID: product.id, bundleID: bundleID)
         appendLedger(
             action: "apply",
             product: product,
@@ -711,8 +686,13 @@ enum PatchService {
             return renames.first(where: { $0.applied == path })?.original ?? path
         }
 
+        // A texture bundle that was not on the device before was created by
+        // the injector; there is no shipped copy to put back. Delete it on
+        // restore instead of demanding a backup that can never exist.
+        let created = Set(CreatedTargetsStore.load(productID: product.id, bundleID: bundleID))
+
         // Preflight: never restore half of a group.
-        for path in paths where !BackupStore.hasBackup(
+        for path in paths where !created.contains(path) && !BackupStore.hasBackup(
             bundleID: bundleID,
             relativePath: backupKey(for: path)
         ) {
@@ -743,6 +723,14 @@ enum PatchService {
                         .map { CacheManifest.RowChange(key: $0.key, original: $0.original, patched: $0.patched) }
                     _ = try? CacheManifest.restoreRows(rows, in: path, fileSystem: fileSystem)
                     log("patch: restored the \(rows.count) row(s) this patch wrote in \(path)", level: .info)
+                    restored.append(path)
+                    continue
+                }
+                if created.contains(path) {
+                    if (try? fileSystem.exists(path)) == true {
+                        try fileSystem.delete(path)
+                        log("patch: removed created file \(path)", level: .info)
+                    }
                     restored.append(path)
                     continue
                 }
@@ -779,6 +767,7 @@ enum PatchService {
         }
 
         AppliedTargetsStore.clear(productID: product.id, bundleID: bundleID)
+        CreatedTargetsStore.clear(productID: product.id, bundleID: bundleID)
         RenamedTargetsStore.clear(productID: product.id, bundleID: bundleID)
         ManifestRowsStore.clear(productID: product.id, bundleID: bundleID)
         appendLedger(

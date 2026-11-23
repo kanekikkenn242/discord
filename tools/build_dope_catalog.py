@@ -19,18 +19,23 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PAYLOADS = os.path.join(HERE, "dope_payloads")
 
 ASSET = "Data/Raw/ios/gameassetbundles/avatar/assetindexer.tdn~2F53YNFWXQZyPdFl8HWBBwtXk~3D"
-TEXTURE = "Data/Raw/ios/optionalavatarres/gameassetbundles/"
+# Payload-2's `targetPathForRow:` writes the texture bundles under the Optional
+# contentcache, with their exact content-addressed names.
+TEXTURE = "Documents/contentcache/Optional/ios/optionalavatarres/gameassetbundles/"
 
 # (package name, payload file, destination, display name)
-# Titles and subtitles are taken verbatim from the dope 7.0 screenshots.
+# Row numbers are the ones in the dope 7.0 binary:
+#   standardFunctionRows = 0, 1, 2  -> drag, up, peito  (HS, no antenna)
+#   alternateFunctionRows = 20, 21, 22, 5 -> hs1, hs2, hs3, antenahand
+#                                        (the "+ antena" variants)
 ENTRIES = [
-    # HS mode
-    ("dope_hs_pescoco", "hs1", ASSET, "hs pescoço"),
-    ("dope_hs_alto", "hs2", ASSET, "hs alto"),
-    ("dope_hs_peito", "hs3_noantenna", ASSET, "hs peito"),
-    # HS + ANTENA mode
-    ("dope_hs_alto_antena", "hs2_antena", ASSET, "hs alto + antena"),
-    ("dope_hs_pescoco_antena", "hs1_antena", ASSET, "hs pescoço + antena"),
+    # HS mode (no antenna) — dope rows 0, 1, 2
+    ("dope_hs_pescoco", "drag", ASSET, "hs pescoço"),
+    ("dope_hs_alto", "up", ASSET, "hs alto"),
+    ("dope_hs_peito", "peito", ASSET, "hs peito"),
+    # HS + ANTENA mode — dope rows 20, 21, 22, 5
+    ("dope_hs_alto_antena", "hs1", ASSET, "hs alto + antena"),
+    ("dope_hs_pescoco_antena", "hs2", ASSET, "hs pescoço + antena"),
     ("dope_hs_barriga_antena", "hs3", ASSET, "hs barriga + antena"),
     ("dope_antena_mao", "antenahand", ASSET, "antena na mão"),
     # Partidas
