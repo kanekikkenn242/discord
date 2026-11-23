@@ -138,13 +138,7 @@ enum FreeFireCatalog {
                      packageNames: ["texture_aranha"], badge: nil, noteKey: nil),
         PatchProduct(id: "texture_alienx", titleKey: "dope.tex.alienx", subtitleKey: "dope.sub.alok",
                      category: .texture, tab: nil, slot: .texture,
-                     packageNames: ["texture_alienx"], badge: nil, noteKey: nil),
-        PatchProduct(id: "texture_kaneki", titleKey: "dope.tex.kaneki", subtitleKey: "dope.sub.alok",
-                     category: .texture, tab: nil, slot: .texture,
-                     packageNames: ["texture_kaneki"], badge: nil, noteKey: nil),
-        PatchProduct(id: "texture_baji", titleKey: "dope.tex.baji", subtitleKey: "dope.sub.alok",
-                     category: .texture, tab: nil, slot: .texture,
-                     packageNames: ["texture_baji"], badge: nil, noteKey: nil)
+                     packageNames: ["texture_alienx"], badge: nil, noteKey: nil)
     ]
 
     private static let legacyProducts: [PatchProduct] = [
