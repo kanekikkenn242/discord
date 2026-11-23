@@ -254,6 +254,22 @@ enum PatchService {
                 throw PatchServiceError.invalidPackage("duplicate destination \(relative)")
             }
             result.append((rule, relative))
+
+            // A texture can be loaded from a cached copy under
+            // `Library/Caches/<bundle id>` rather than from the contentcache
+            // original. Patch every copy of the *same* avatar index; never
+            // touch the other characters' bundles.
+            if rule.source.hasPrefix("texture_") {
+                let logical = ((destination as NSString).lastPathComponent as NSString)
+                    .components(separatedBy: ".").first ?? ""
+                for copy in fileSystem.matchingFiles(prefix: logical) where seen.insert(copy.path).inserted {
+                    log(
+                        "patch: \(rule.source) also writes cached copy \(copy.path) (\(copy.size) B)",
+                        level: .info
+                    )
+                    result.append((rule, copy.path))
+                }
+            }
         }
         return result
     }

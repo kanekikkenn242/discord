@@ -33,6 +33,11 @@ protocol PatchFileSystem {
     /// The file whose name carries one of these tokens is the one the game
     /// actually loads.
     func manifestTokens(at relativePath: String, for logical: String) -> [String]
+
+    /// Every on-disk copy of `prefix`, including cached ones under
+    /// `Library/Caches/<bundle id>`. Free Fire can load a bundle from a cache
+    /// copy instead of the contentcache original.
+    func matchingFiles(prefix: String) -> [(path: String, size: Int)]
 }
 
 extension PatchFileSystem {
@@ -52,6 +57,10 @@ extension PatchFileSystem {
     }
 
     func manifestTokens(at relativePath: String, for logical: String) -> [String] {
+        []
+    }
+
+    func matchingFiles(prefix: String) -> [(path: String, size: Int)] {
         []
     }
 
@@ -406,6 +415,40 @@ struct LocalPatchFileSystem: PatchFileSystem {
             in: URL(fileURLWithPath: rootPath).appendingPathComponent(safe).path,
             for: logical
         )
+    }
+
+    func matchingFiles(prefix: String) -> [(path: String, size: Int)] {
+        let manager = FileManager.default
+        var directories: [String] = []
+        for root in hotRoots + [rootPath] {
+            for tail in ["", "ios", "gameassetbundles", "ios/gameassetbundles",
+                         "ios/optionalavatarres/gameassetbundles",
+                         "optionalavatarres/gameassetbundles"] {
+                let directory = (root as NSString).appendingPathComponent(tail)
+                var isDirectory: ObjCBool = false
+                guard manager.fileExists(atPath: directory, isDirectory: &isDirectory),
+                      isDirectory.boolValue else { continue }
+                if !directories.contains(directory) { directories.append(directory) }
+            }
+        }
+        var result: [(path: String, size: Int)] = []
+        var seen = Set<String>()
+        for directory in directories {
+            let names = (try? manager.contentsOfDirectory(atPath: directory)) ?? []
+            for name in names where name.hasPrefix(prefix) {
+                let full = (directory as NSString).appendingPathComponent(name)
+                guard isExistingFile(URL(fileURLWithPath: full)), seen.insert(full).inserted else {
+                    continue
+                }
+                let size = (try? manager.attributesOfItem(atPath: full)[.size] as? NSNumber)?
+                    .intValue ?? 0
+                let relative = full.hasPrefix(rootPath + "/")
+                    ? String(full.dropFirst(rootPath.count + 1))
+                    : full
+                result.append((relative, size))
+            }
+        }
+        return result
     }
 }
 
