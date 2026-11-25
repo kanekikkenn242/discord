@@ -188,12 +188,44 @@ async function checkKey(raw) {
   return { active: true, reason: null, status: 'granted', expiry, legacy: true };
 }
 
-async function generateFreeKey() {
+const FREE_KEY_WINDOW = 86400000; // 24 h
+
+/// Only one free key per device in any 24-hour window, and never a second key
+/// while the current one is still valid.
+async function freeKeyGate() {
+  const stored = localStorage.getItem(STORE.key);
+  if (stored) {
+    const result = await checkKey(stored);
+    if (result.active) {
+      const until = result.expiry ? result.expiry.toISOString().slice(0, 10) : '—';
+      return { ok: false, message: `Ya tenés una key activa hasta ${until}. No se puede generar otra.` };
+    }
+  }
   const last = Number(localStorage.getItem(STORE.lastKey) || 0);
+  if (last) {
+    const left = FREE_KEY_WINDOW - (Date.now() - last);
+    if (left > 0) {
+      const hours = Math.max(1, Math.ceil(left / 3600000));
+      return { ok: false, message: `Una key cada 24 horas. Probá de nuevo en ${hours} h.` };
+    }
+  }
+  return { ok: true };
+}
+
+async function refreshFreeKeyGate() {
+  const gate = await freeKeyGate();
   const note = $('fk-note');
-  if (Date.now() - last < 86400000) {
-    const hours = Math.ceil((86400000 - (Date.now() - last)) / 3600000);
-    note.textContent = `Una key cada 24 horas. Probá de nuevo en ${hours} h.`;
+  const button = $('fk-go');
+  if (note && !gate.ok) note.textContent = gate.message;
+  if (button) button.disabled = !gate.ok;
+  return gate;
+}
+
+async function generateFreeKey() {
+  const note = $('fk-note');
+  const gate = await freeKeyGate();
+  if (!gate.ok) {
+    note.textContent = gate.message;
     return;
   }
   const key = await generateKey(1);
@@ -204,6 +236,7 @@ async function generateFreeKey() {
   $('fk-key').textContent = key;
   $('fk-result').classList.remove('hidden');
   note.textContent = '';
+  await refreshFreeKeyGate();
 }
 
 function copyGeneratedKey() {
@@ -366,5 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSign('esign');
   setLang('es');
   renderProfile();
+  refreshFreeKeyGate();
   initWave();
 });

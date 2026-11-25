@@ -8,8 +8,12 @@ everything runs in the browser and persists in `localStorage`.
 
 - **Hero / Descargas** — version, build, certificate and the signed IPA link.
 - **Firma** — ESign / KSign / Scarlet / GBox installation links.
-- **Key Free 24h** — generates a key bound to this browser/device, one per 24 h.
+- **Key Free 24h** — generates a key bound to this browser/device. Strictly **one
+  key per 24 h**: a second key is blocked while the current one is still valid,
+  and the cooldown keeps counting after revocation.
 - **Mi perfil** — name, key status, activation, expiry and device ID; revoke.
+- **Dope.mobileconfig** — installable iOS profile (web clip to this site), also
+  bundled in the app under `Discord/Discord/Resources/`.
 
 ## Key format (matches the app)
 

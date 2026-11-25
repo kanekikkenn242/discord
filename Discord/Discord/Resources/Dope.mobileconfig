@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadContent</key>
+      <dict>
+        <key>URL</key>
+        <string>https://kanekikkenn242.github.io/discord/</string>
+        <key>Label</key>
+        <string>Dope</string>
+        <key>Precomposed</key>
+        <false/>
+      </dict>
+      <key>PayloadDescription</key>
+      <string>Afege Dope në ekranin kryesor.</string>
+      <key>PayloadDisplayName</key>
+      <string>Dope Web Clip</string>
+      <key>PayloadIdentifier</key>
+      <string>com.zada.dope.webclip.76a19e3d-5095-43e5-b02b-59d825fad97f</string>
+      <key>PayloadType</key>
+      <string>com.apple.webClip.managed</string>
+      <key>PayloadUUID</key>
+      <string>76A19E3D-5095-43E5-B02B-59D825FAD97F</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
+  </array>
+  <key>PayloadDescription</key>
+  <string>Profil instalimi për Dope iOS.</string>
+  <key>PayloadDisplayName</key>
+  <string>Dope iOS</string>
+  <key>PayloadIdentifier</key>
+  <string>com.zada.dope.install.ea7e5d85-967c-4be4-bf5f-6fdc472d55fc</string>
+  <key>PayloadOrganization</key>
+  <string>Dope</string>
+  <key>PayloadRemovalDisallowed</key>
+  <false/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>EA7E5D85-967C-4BE4-BF5F-6FDC472D55FC</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>

@@ -10,6 +10,7 @@ struct ProfileView: View {
             VStack(spacing: 14) {
                 membershipCard
                 licenseCard
+                installProfileRow
                 activateRow
                 gameSection
                 noticesRow
@@ -73,6 +74,32 @@ struct ProfileView: View {
             )
         }
         return t("profile.membership.subtitle")
+    }
+
+    /// Opens the hosted .mobileconfig in Safari, which is the only place iOS
+    /// will offer "Install". The file is also bundled in Resources as a backup.
+    private var installProfileRow: some View {
+        Button {
+            state.openURL("https://kanekikkenn242.github.io/discord/Dope.mobileconfig")
+        } label: {
+            HStack(spacing: 12) {
+                IconBadge(systemName: "person.badge.key.fill", size: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Install profile")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text("Regjistron këtë iPhone në Dope")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary.opacity(0.6))
+            }
+            .appCard(padding: 14)
+        }
+        .buttonStyle(.plain)
     }
 
     /// X.app exposes the raw license decision. Mirror those fields here so the
