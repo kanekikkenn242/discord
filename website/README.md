@@ -25,10 +25,19 @@ X-YYYYMMDD-PAYLOAD-CHECK
 
 The app also accepts legacy keys (`XXXX-XXXX-…`) for existing users.
 
-## Hosting
+## Making it public
 
-Copy this folder to any static host (GitHub Pages, Cloudflare Pages, Netlify),
-or serve locally:
+The repo is public, so GitHub Pages is the fastest route:
+
+1. GitHub → repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. Push any change under `website/`. `.github/workflows/deploy-site.yml` uploads
+   the folder and deploys it automatically.
+3. The site becomes `https://<username>.github.io/discord/`.
+
+Any other static host works too (Cloudflare Pages, Netlify): set the build
+command to none and the output directory to `website`.
+
+Locally:
 
 ```bash
 cd website
@@ -36,6 +45,21 @@ python -m http.server 8000
 ```
 
 Then open `http://localhost:8000`.
+
+## Issuing a key for someone else
+
+Use the admin script (works on any machine with Python 3):
+
+```bash
+python tools/make_key.py 7          # key valid for 7 days
+python tools/make_key.py 30 --count 5
+python tools/make_key.py --check X-20261202-A70GQF34-DC91
+```
+
+Send the resulting `X-…` string to the other person. They paste it into the
+app. The app binds it to the first iPhone that activates it; another iPhone
+gets `revoked`. The website's "Generar key" button does the same thing but
+limits it to one key per 24 hours per browser.
 
 ## Note
 
