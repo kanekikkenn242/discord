@@ -1,8 +1,8 @@
 # Dope — distribution portal (local reconstruction)
 
-Static recreation of the `xkeyapi.onrender.com` distribution page, rebranded to
-**Dope** with the original dark/monochrome `lp-*` design. No backend is required:
-everything runs in the browser and persists in `localStorage`.
+**Dope** distribution portal: dark/monochrome `lp-*` design, self-hosted, with no
+third-party server and no Discord links. No backend is required: everything runs
+in the browser and persists in `localStorage`.
 
 ## What is here
 

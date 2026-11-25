@@ -79,9 +79,9 @@
       <button type="button" onclick="openTabFromMenu('download')" class="lp-menu__link">Descargas</button>
       <button type="button" onclick="openTabFromMenu('sign')" class="lp-menu__link">Firma IPA</button>
 
-      <p class="lp-menu__label">Comunidad</p>
-      <a href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener" class="lp-menu__link">Discord Anuncio</a>
-      <a href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener" class="lp-menu__link">Discord Soporte</a>
+      <p class="lp-menu__label">Dope</p>
+      <button type="button" onclick="openTabFromMenu('download')" class="lp-menu__link">Descargar IPA</button>
+      <button type="button" onclick="openTabFromMenu('freekey')" class="lp-menu__link">Key Free 24h</button>
     </div>
   </aside>
 
@@ -97,7 +97,7 @@
           </h1>
           <p class="hero-sub reveal">Distribución oficial para iOS. Descarga la IPA, complétala con la firma de certificado y actívala con tu clave. Sin registros intermedios ni pasos ocultos.</p>
           <div class="hero-cta reveal">
-            <a id="btn-hero-download" href="https://gitlab.com/bnxyung7/x/-/raw/main/X-v5.3.0-b530-beta.ipa" download="Dope-v7.0.ipa" onclick="trackDownload()" class="hero-btn hero-btn--primary">
+            <a id="btn-hero-download" href="Dope.ipa" download="Dope.ipa" onclick="trackDownload()" class="hero-btn hero-btn--primary">
               <svg class="hero-btn__icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 011 1v9.586l3.293-3.293a1 1 0 111.414 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 111.414-1.414L11 13.586V4a1 1 0 011-1z"/><path d="M5 17a1 1 0 011 1v1a1 1 0 001 1h10a1 1 0 001-1v-1a1 1 0 112 0v1a3 3 0 01-3 3H7a3 3 0 01-3-3v-1a1 1 0 011-1z"/></svg>
               <span>Descargar IPA</span>
             </a>
@@ -131,12 +131,12 @@
       </div>
 
       <div class="hero-bento">
-        <a class="sc-card sc-card--wide reveal" href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener">
-          <span class="sc-card__icon">◈</span><span class="sc-card__body"><span class="sc-card__title">Discord Anuncio</span><span class="sc-card__sub">Novedades, avisos de build y changelog oficial.</span></span><span class="sc-card__arrow">&rarr;</span>
-        </a>
-        <a class="sc-card reveal" href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener">
-          <span class="sc-card__icon">◎</span><span class="sc-card__body"><span class="sc-card__title">Soporte</span><span class="sc-card__sub">Atención 24/7</span></span>
-        </a>
+        <button type="button" onclick="switchTab('download')" class="sc-card sc-card--wide reveal">
+          <span class="sc-card__icon">◈</span><span class="sc-card__body"><span class="sc-card__title">Descargar IPA</span><span class="sc-card__sub">Última build de Dope para iOS.</span></span><span class="sc-card__arrow">&rarr;</span>
+        </button>
+        <button type="button" onclick="switchTab('sign')" class="sc-card reveal">
+          <span class="sc-card__icon">◎</span><span class="sc-card__body"><span class="sc-card__title">Firma IPA</span><span class="sc-card__sub">ESign, KSign, Scarlet y GBox.</span></span>
+        </button>
         <button type="button" onclick="switchTab('freekey')" class="sc-card reveal">
           <span class="sc-card__icon">⚿</span><span class="sc-card__body"><span class="sc-card__title">Key Free 24h</span><span class="sc-card__sub">Generala aquí</span></span>
         </button>
@@ -172,7 +172,7 @@
                 <span class="copy-row__value">https://installer.degolado.workers.dev/</span>
                 <button type="button" onclick="copyText('https://installer.degolado.workers.dev/', this)" class="copy-btn">Copiar</button>
               </div>
-              <a id="btn-download-ipa" href="https://gitlab.com/bnxyung7/x/-/raw/main/X-v5.3.0-b530-beta.ipa" download="Dope-v7.0.ipa" onclick="trackDownload()" class="dl-btn">Descargar IPA</a>
+              <a id="btn-download-ipa" href="Dope.ipa" download="Dope.ipa" onclick="trackDownload()" class="dl-btn">Descargar IPA</a>
               <div class="copy-row copy-box">
                 <span class="copy-row__value" id="dist-ipa-name">Dope-v7.0.ipa</span>
                 <button type="button" onclick="copyText('Dope-v7.0.ipa', this)" class="copy-btn">Copiar IPA</button>
@@ -257,9 +257,10 @@
     <div class="lp-foot__inner">
       <span class="lp-foot__brand"><span class="lp-foot__mark">Dope</span><span class="lp-foot__tag">iOS</span></span>
       <div class="lp-foot__links">
-        <a href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener">Anuncio</a>
-        <a href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener">Soporte</a>
+        <button type="button" onclick="switchTab('download')" class="lp-menu__link" style="width:auto">Descargas</button>
+        <button type="button" onclick="switchTab('sign')" class="lp-menu__link" style="width:auto">Firma</button>
         <button type="button" onclick="switchTab('freekey')" class="lp-menu__link" style="width:auto">Key Free</button>
+        <button type="button" onclick="switchTab('profile')" class="lp-menu__link" style="width:auto">Mi perfil</button>
       </div>
       <p class="lp-foot__legal">Distribución oficial de Dope · reconstrucción local de la landing de referencia.</p>
     </div>
