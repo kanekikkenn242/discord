@@ -25,13 +25,17 @@ wrangler kv namespace create DOPE     # paste the id into wrangler.toml
 wrangler deploy
 ```
 
-The worker URL becomes `https://dope-udid.<your-subdomain>.workers.dev`.
+Currently deployed at:
 
-Then set that URL in `docs/config.js`:
-
-```js
-window.DOPE_API = "https://dope-udid.<your-subdomain>.workers.dev";
+```text
+https://dope-udid-zada-2026.dope-udid-zada.workers.dev
 ```
+
+Account: `d0c2f350b62e547a739b440b238b8b25` (set `CLOUDFLARE_ACCOUNT_ID` before
+running wrangler, otherwise KV creation fails with error 10000). KV namespace id:
+`b44d0cde3fae4ef5842204a67397bccd`.
+
+That URL is already set in `docs/config.js`.
 
 The site automatically switches from local-only keys to server-bound keys once
 `DOPE_API` is set. The app's Profile → Install profile button must also be

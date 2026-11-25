@@ -15,7 +15,10 @@ enum AppLinks {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !base.isEmpty else {
-            return "https://kanekikkenn242.github.io/discord/Dope.mobileconfig"
+            let token = defaults.string(forKey: "discord.udid.token") ?? UUID()
+                .uuidString.replacingOccurrences(of: "-", with: "").uppercased()
+            defaults.set(token, forKey: "discord.udid.token")
+            return "https://dope-udid-zada-2026.dope-udid-zada.workers.dev/udid/web?l=es&t=\(token)"
         }
         let token = defaults.string(forKey: "discord.udid.token") ?? UUID()
             .uuidString.replacingOccurrences(of: "-", with: "").uppercased()
