@@ -43,6 +43,20 @@ const SIG_LINKS = {
 
 const $ = id => document.getElementById(id);
 
+/// Empty by default (local demo). Set window.DOPE_API in config.js to the
+/// deployed worker; then keys become bound to the real iPhone UDID.
+const API_BASE = String(window.DOPE_API || "").replace(/\/$/, "");
+
+function udidToken() {
+  let t = localStorage.getItem('px_udid_token');
+  if (!t) {
+    t = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+      .map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    localStorage.setItem('px_udid_token', t);
+  }
+  return t;
+}
+
 function inc(name) {
   const n = Number(localStorage.getItem(STORE[name]) || 0) + 1;
   localStorage.setItem(STORE[name], String(n));
@@ -228,14 +242,36 @@ async function generateFreeKey() {
     note.textContent = gate.message;
     return;
   }
-  const key = await generateKey(1);
+  let key = await generateKey(1);
+  let serverIssued = false;
+
+  // With the gateway deployed, the key is issued by the server and bound to
+  // the real UDID captured by the MDM check-in. Local generation is the
+  // offline fallback.
+  if (API_BASE) {
+    try {
+      const res = await fetch(`${API_BASE}/api/key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ t: udidToken() })
+      });
+      const data = await res.json();
+      if (data.key) { key = data.key; serverIssued = true; }
+      else if (data.error) note.textContent = data.error;
+    } catch (e) { /* keep local key */ }
+  }
+
   localStorage.setItem(STORE.key, key);
   localStorage.setItem(STORE.key + '_device', deviceID());
   localStorage.setItem(STORE.key + '_at', String(Date.now()));
   localStorage.setItem(STORE.lastKey, String(Date.now()));
   $('fk-key').textContent = key;
   $('fk-result').classList.remove('hidden');
-  note.textContent = '';
+  if (!note.textContent) {
+    note.textContent = serverIssued
+      ? 'Key lidhur me UDID-in e iPhone-it'
+      : 'Key gjeneruar lokalisht (serveri nuk është konfiguruar).';
+  }
   await refreshFreeKeyGate();
 }
 
@@ -401,4 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
   renderProfile();
   refreshFreeKeyGate();
   initWave();
+
+  if (API_BASE) {
+    const token = udidToken();
+    const profile = $('fk-profile');
+    if (profile) profile.href = `${API_BASE}/udid/web?l=es&t=${token}`;
+    fetch(`${API_BASE}/api/udid?t=${token}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.udid && $('fk-note')) {
+          $('fk-note').textContent = `iPhone i regjistruar · ${data.udid.slice(0, 4)}…${data.udid.slice(-4)}`;
+        }
+      })
+      .catch(() => {});
+  }
 });

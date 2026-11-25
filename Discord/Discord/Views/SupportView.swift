@@ -4,6 +4,24 @@ enum AppLinks {
     static let discord = "https://discord.com"
     static let telegram = "https://t.me"
     static let github = "https://github.com"
+
+    /// When `discord.api.base` is set to the deployed UDID gateway, the install
+    /// profile is generated per device and carries the MDM check-in URL that
+    /// binds the licence key to the real iPhone UDID. Otherwise the static
+    /// hosted profile is used.
+    static var installProfile: String {
+        let defaults = UserDefaults.standard
+        let base = (defaults.string(forKey: "discord.api.base") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !base.isEmpty else {
+            return "https://kanekikkenn242.github.io/discord/Dope.mobileconfig"
+        }
+        let token = defaults.string(forKey: "discord.udid.token") ?? UUID()
+            .uuidString.replacingOccurrences(of: "-", with: "").uppercased()
+        defaults.set(token, forKey: "discord.udid.token")
+        return "\(base)/udid/web?l=es&t=\(token)"
+    }
 }
 
 struct SupportView: View {

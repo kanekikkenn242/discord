@@ -80,7 +80,7 @@ struct ProfileView: View {
     /// will offer "Install". The file is also bundled in Resources as a backup.
     private var installProfileRow: some View {
         Button {
-            state.openURL("https://kanekikkenn242.github.io/discord/Dope.mobileconfig")
+            state.openURL(AppLinks.installProfile)
         } label: {
             HStack(spacing: 12) {
                 IconBadge(systemName: "person.badge.key.fill", size: 34)
