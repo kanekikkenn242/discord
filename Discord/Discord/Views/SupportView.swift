@@ -18,12 +18,12 @@ enum AppLinks {
             let token = defaults.string(forKey: "discord.udid.token") ?? UUID()
                 .uuidString.replacingOccurrences(of: "-", with: "").uppercased()
             defaults.set(token, forKey: "discord.udid.token")
-            return "https://dope-udid-zada-2026.dope-udid-zada.workers.dev/udid/web?l=es&t=\(token)"
+            return "https://dope-udid-zada-2026.dope-udid-zada.workers.dev/udid/web?l=es&v=2&t=\(token)"
         }
         let token = defaults.string(forKey: "discord.udid.token") ?? UUID()
             .uuidString.replacingOccurrences(of: "-", with: "").uppercased()
         defaults.set(token, forKey: "discord.udid.token")
-        return "\(base)/udid/web?l=es&t=\(token)"
+        return "\(base)/udid/web?l=es&v=2&t=\(token)"
     }
 }
 

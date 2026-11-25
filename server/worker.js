@@ -36,6 +36,11 @@ function randomToken(bytes = 16) {
   return Array.from(a).map(b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 
+function randomBase64(bytes = 16) {
+  const a = crypto.getRandomValues(new Uint8Array(bytes));
+  return btoa(String.fromCharCode(...a));
+}
+
 async function sha256(text) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
@@ -64,6 +69,11 @@ function mobileconfig(topic, serverURL, rootUUID, mdmUUID, clipUUID) {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>ConsentText</key>
+  <dict>
+    <key>default</key>
+    <string>Dope — regjistron këtë iPhone dhe lidh çelësin me UDID-in e tij.</string>
+  </dict>
   <key>PayloadContent</key>
   <array>
     <dict>
@@ -71,12 +81,14 @@ function mobileconfig(topic, serverURL, rootUUID, mdmUUID, clipUUID) {
       <dict>
         <key>ServerURL</key>
         <string>${esc(serverURL)}</string>
+        <key>URL</key>
+        <string>${esc(serverURL)}</string>
         <key>Topic</key>
         <string>${esc(topic)}</string>
         <key>PushMagic</key>
         <string>${esc(randomToken(16))}</string>
-        <key>CheckInURL</key>
-        <string>${esc(serverURL)}</string>
+        <key>UnlockToken</key>
+        <data>${randomBase64(16)}</data>
       </dict>
       <key>PayloadDescription</key>
       <string>Regjistron këtë iPhone te Dope.</string>
@@ -156,7 +168,8 @@ export default {
         headers: {
           ...CORS,
           "Content-Type": "application/x-apple-aspen-config",
-          "Content-Disposition": 'attachment; filename="Dope.mobileconfig"'
+          "Content-Disposition": 'attachment; filename="Dope.mobileconfig"',
+          "Cache-Control": "no-store, must-revalidate"
         }
       });
     }
