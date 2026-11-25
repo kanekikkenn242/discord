@@ -57,7 +57,7 @@ struct SplashView: View {
                     }
 
                     Button {
-                        state.openSystemSettings()
+                        state.openURL(AppLinks.installProfile)
                     } label: {
                         HStack(spacing: 12) {
                             IconBadge(systemName: "square.and.arrow.down", size: 32)
