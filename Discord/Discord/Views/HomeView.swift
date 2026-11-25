@@ -46,6 +46,7 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active else { return }
+            state.activation.revalidate()
             state.pairing.refresh()
             state.refreshPatches()
         }

@@ -9,6 +9,7 @@ struct ProfileView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 membershipCard
+                licenseCard
                 activateRow
                 gameSection
                 noticesRow
@@ -72,6 +73,45 @@ struct ProfileView: View {
             )
         }
         return t("profile.membership.subtitle")
+    }
+
+    /// X.app exposes the raw license decision. Mirror those fields here so the
+    /// reason, expiry, device binding and activation status are all visible.
+    private var licenseCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            SectionHeader(title: "LICENSE GATE")
+
+            licenseRow("Status", activation.isActivated
+                ? (activation.isLegacyKey ? "granted · legacy" : "granted")
+                : (activation.licenseReason?.rawValue ?? "inactive"))
+
+            if activation.isActivated {
+                licenseRow("Key", activation.activatedKeyMasked)
+                licenseRow("Activation", "granted")
+                licenseRow("Expires", activation.expiresAt?.formatted(date: .abbreviated, time: .omitted) ?? "—")
+                licenseRow("Device", String(activation.deviceID.prefix(12)))
+            } else if let reason = activation.licenseReason {
+                licenseRow("Reason", reason.rawValue)
+                Text(reason.message)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.orange)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard(padding: 14)
+    }
+
+    private func licenseRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
     }
 
     private var activateRow: some View {

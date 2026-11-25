@@ -17,20 +17,26 @@ final class ActivationStore: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var activatedKeyMasked: String = ""
     @Published private(set) var activatedAt: Date?
+    @Published private(set) var licenseReason: LicenseReason?
+    @Published private(set) var expiresAt: Date?
+    @Published private(set) var deviceID: String = ""
+    @Published private(set) var isLegacyKey: Bool = false
 
     private let keyStore = "discord.activation.key"
     private let dateStore = "discord.activation.date"
 
     init() {
         if let stored = UserDefaults.standard.string(forKey: keyStore), !stored.isEmpty {
-            activatedKeyMasked = Self.mask(stored)
-            activatedAt = UserDefaults.standard.object(forKey: dateStore) as? Date
-            state = .active
+            apply(decision: LicenseGate.check(stored), key: stored, persist: false)
+        } else {
+            deviceID = LicenseGate.deviceID()
         }
     }
 
     var isActivated: Bool {
-        state.isActive
+        guard state.isActive else { return false }
+        if let expiry = expiresAt, expiry <= Date() { return false }
+        return true
     }
 
     var isBusy: Bool {
@@ -40,6 +46,9 @@ final class ActivationStore: ObservableObject {
     var statusText: String {
         switch state {
         case .active:
+            if let expiry = expiresAt {
+                return "Active · \(activatedKeyMasked) · until \(expiry.formatted(date: .abbreviated, time: .omitted))"
+            }
             return "Active · \(activatedKeyMasked)"
         case .activating:
             return "Activating…"
@@ -55,33 +64,70 @@ final class ActivationStore: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
 
-        guard candidate.range(of: #"^[A-Z0-9][A-Z0-9\-]{7,63}$"#, options: .regularExpression) != nil else {
-            errorMessage = "Enter a valid access key (letters, numbers and dashes)."
-            state = .failed("Invalid key")
+        guard !candidate.isEmpty else {
+            errorMessage = LicenseReason.keyMissing.message
+            state = .failed(LicenseReason.keyMissing.message)
             return
         }
 
         errorMessage = nil
         state = .activating
-        try? await Task.sleep(nanoseconds: 900_000_000)
+        try? await Task.sleep(nanoseconds: 450_000_000)
 
-        // The public rebuild keeps activation local: no key is sent to a
-        // third-party licence server. The X backend is intentionally not
-        // reimplemented here.
-        UserDefaults.standard.set(candidate, forKey: keyStore)
-        UserDefaults.standard.set(Date(), forKey: dateStore)
-        activatedKeyMasked = Self.mask(candidate)
-        activatedAt = Date()
-        key = ""
-        state = .active
-        log("activation: key accepted locally (\(activatedKeyMasked))", level: .success)
+        let decision = LicenseGate.check(candidate)
+        apply(decision: decision, key: candidate, persist: decision.active)
+
+        if decision.active {
+            key = ""
+            log(
+                "activation: \(isLegacyKey ? "legacy" : "X-style") key accepted (\(activatedKeyMasked)), expires \(expiresAt?.formatted(date: .abbreviated, time: .omitted) ?? "never")",
+                level: .success
+            )
+        } else {
+            log("activation: refused — \(decision.reason?.rawValue ?? "unknown")", level: .warning)
+        }
+    }
+
+    /// Re-checks a stored key (expiry, revocation, device binding). Called when
+    /// the app becomes active so an expired key cannot keep patches unlocked.
+    func revalidate() {
+        guard let stored = UserDefaults.standard.string(forKey: keyStore), !stored.isEmpty else { return }
+        apply(decision: LicenseGate.check(stored), key: stored, persist: false)
+    }
+
+    private func apply(decision: LicenseDecision, key stored: String, persist: Bool) {
+        licenseReason = decision.reason
+        expiresAt = decision.expiresAt
+        deviceID = decision.deviceID
+        isLegacyKey = decision.legacy
+        activatedKeyMasked = Self.mask(stored)
+
+        if decision.active {
+            if persist {
+                UserDefaults.standard.set(stored, forKey: keyStore)
+                UserDefaults.standard.set(Date(), forKey: dateStore)
+                activatedAt = Date()
+            } else {
+                activatedAt = UserDefaults.standard.object(forKey: dateStore) as? Date
+            }
+            state = .active
+            errorMessage = nil
+        } else {
+            state = .failed(decision.reason?.message ?? LicenseReason.rejected.message)
+            errorMessage = decision.reason?.message
+        }
     }
 
     func deactivate() {
         UserDefaults.standard.removeObject(forKey: keyStore)
         UserDefaults.standard.removeObject(forKey: dateStore)
+        LicenseGate.forgetDevice()
         activatedKeyMasked = ""
         activatedAt = nil
+        licenseReason = nil
+        expiresAt = nil
+        deviceID = LicenseGate.deviceID()
+        isLegacyKey = false
         state = .inactive
         errorMessage = nil
         log("activation: membership removed", level: .warning)
