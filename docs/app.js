@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (API_BASE) {
     const token = udidToken();
     const links = [$('fk-profile'), $('profile-install-link')].filter(Boolean);
-    links.forEach(link => { link.href = `${API_BASE}/udid/web?l=es&v=3&t=${token}`; });
+    links.forEach(link => { link.href = `${API_BASE}/udid/web?l=es&v=4&t=${token}`; });
     fetch(`${API_BASE}/api/udid?t=${token}`)
       .then(r => r.json())
       .then(data => {

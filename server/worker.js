@@ -12,6 +12,75 @@
  */
 
 const SALT = "zada-license-v1";
+const IDENTITY_UUID = "A1B2C3D4E5F60718293A4B5C6D7E8F90";
+const IDENTITY_P12 = `\n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
+tY7kBAjZC8XZcOPnZwICCAA=\n`;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
@@ -77,8 +146,30 @@ function mobileconfig(topic, serverURL, rootUUID, mdmUUID, clipUUID) {
   <key>PayloadContent</key>
   <array>
     <dict>
+      <key>PayloadCertificateFileName</key>
+      <string>dope-identity.p12</string>
+      <key>PayloadContent</key>
+      <data>${IDENTITY_P12}</data>
+      <key>Password</key>
+      <string>dope1234</string>
+      <key>PayloadDescription</key>
+      <string>Identiteti Dope per MDM.</string>
+      <key>PayloadDisplayName</key>
+      <string>Dope Identity</string>
+      <key>PayloadIdentifier</key>
+      <string>com.zada.dope.identity.${IDENTITY_UUID}</string>
+      <key>PayloadType</key>
+      <string>com.apple.security.pkcs12</string>
+      <key>PayloadUUID</key>
+      <string>${IDENTITY_UUID}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
+    <dict>
       <key>PayloadContent</key>
       <dict>
+        <key>IdentityCertificateUUID</key>
+        <string>${IDENTITY_UUID}</string>
         <key>ServerURL</key>
         <string>${esc(serverURL)}</string>
         <key>URL</key>
