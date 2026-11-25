@@ -32,22 +32,19 @@ The app also accepts legacy keys (`XXXX-XXXX-…`) for existing users.
 
 ## Making it public
 
-The repo is public, so GitHub Pages is the fastest route:
+GitHub Pages serves this folder directly from `docs/` on `main` (Source:
+"Deploy from a branch", branch `main`, folder `/docs`). Every push updates the
+site — no Actions artifact, no upload step.
 
-1. **One manual step first:** GitHub → repository **Settings → Pages → Build and
-   deployment → Source: GitHub Actions**. Until this is set once, the deploy job
-   fails with `Get Pages site failed ... Not Found` even with `enablement: true`.
-2. Push any change under `website/`. `.github/workflows/deploy-site.yml` uploads
-   the folder and deploys it automatically.
-3. The site becomes `https://<username>.github.io/discord/`.
+The site is live at `https://kanekikkenn242.github.io/discord/`.
 
 Any other static host works too (Cloudflare Pages, Netlify): set the build
-command to none and the output directory to `website`.
+command to none and the output directory to `docs`.
 
 Locally:
 
 ```bash
-cd website
+cd docs
 python -m http.server 8000
 ```
 
