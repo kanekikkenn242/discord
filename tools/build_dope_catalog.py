@@ -51,7 +51,6 @@ ENTRIES = [
     ("texture_mordecai", "mordecai", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura mordecai"),
     ("texture_aranha", "spider", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura homem-aranha"),
     ("texture_alienx", "alienx", TEXTURE + "optionalab_avatar_66.1GZrX1l5Sm~2FgqXYqB7dDyULWdn4~3D", "textura alien-x"),
-    ("texture_freestyle", "freestyle", TEXTURE + "optionalab_avatar_51.DIIXT~2BP2qBfSYlHCjgNLbcba9rk~3D", "textura freestyle"),
 ]
 
 
