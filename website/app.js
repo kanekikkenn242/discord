@@ -1,4 +1,4 @@
-/* Project X distribution portal — local demo.
+/* Dope distribution portal — local demo.
    The key format matches Discord.app's LicenseGate.swift exactly:
    X-YYYYMMDD-PAYLOAD-CHECK where CHECK = SHA256("zada-license-v1|DATE|PAYLOAD")[0..4]. */
 
@@ -51,16 +51,52 @@ function inc(name) {
 
 function trackDownload() {
   const n = inc('downloads');
-  $('stat-downloads').textContent = n;
-  $('m-downloads').textContent = n;
+  ['stat-downloads', 'stat-downloads-hero', 'stat-downloads-big'].forEach(id => {
+    const el = $(id);
+    if (el) el.textContent = n;
+  });
 }
 
+const TAB_IDS = { download: 'download', sign: 'sign', installer: 'sign', freekey: 'freekey', profile: 'profile' };
+const NAV_IDS = { download: 'download', sign: 'installer', installer: 'installer', freekey: 'freekey', profile: 'profile' };
+
 function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.id === 'tab-' + tab));
-  document.querySelectorAll('.nav-link').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  tab = TAB_IDS[tab] || 'download';
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  const content = $('content-' + tab);
+  if (content) content.classList.add('active');
+  document.querySelectorAll('.lp-nav-link').forEach(el => el.classList.remove('active'));
+  const nav = $('nav-link-' + (NAV_IDS[tab] || tab));
+  if (nav) nav.classList.add('active');
   if (tab === 'profile') renderProfile();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const area = $('content-area');
+  if (area) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+function toggleMenu() {
+  const menu = $('user-menu');
+  const backdrop = $('config-backdrop');
+  const btn = $('nav-menu-btn');
+  if (!menu) return;
+  const open = !menu.classList.contains('is-open');
+  menu.classList.toggle('hidden', !open);
+  menu.classList.toggle('is-open', open);
+  if (backdrop) backdrop.classList.toggle('hidden', !open);
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.body.classList.toggle('lp-lock', open);
+}
+
+function closeMenu() {
+  const menu = $('user-menu');
+  const backdrop = $('config-backdrop');
+  const btn = $('nav-menu-btn');
+  if (menu) { menu.classList.remove('is-open'); menu.classList.add('hidden'); }
+  if (backdrop) backdrop.classList.add('hidden');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('lp-lock');
+}
+
+function openTabFromMenu(tab) { closeMenu(); switchTab(tab); }
 
 function copyText(value, button) {
   navigator.clipboard.writeText(value).then(() => {
@@ -189,40 +225,58 @@ async function revokeKey() {
 
 async function renderProfile() {
   const stored = localStorage.getItem(STORE.key);
-  const name = JSON.parse(localStorage.getItem(STORE.profile) || '{}').name;
-  $('profile-input').value = name || '';
-  $('profile-name').textContent = name || 'Invitado';
-  $('profile-avatar').textContent = (name || 'P').charAt(0).toUpperCase();
+  const name = JSON.parse(localStorage.getItem(STORE.profile) || '{}').name || 'Invitado';
+  const input = $('profile-name-input');
+  if (input) input.value = name;
+  const label = $('profile-name');
+  if (label) label.textContent = name;
+  const heading = $('profile-heading');
+  if (heading) heading.textContent = name;
+  const avatar = $('profile-avatar');
+  if (avatar) avatar.textContent = name.charAt(0).toUpperCase();
+  const menuAvatar = $('menu-avatar');
+  if (menuAvatar) menuAvatar.textContent = name.charAt(0).toUpperCase();
 
+  const set = (id, value) => { const el = $(id); if (el) el.textContent = value; };
   if (!stored) {
-    $('p-status').textContent = 'inactive';
-    $('p-key').textContent = '—';
-    $('p-activation').textContent = '—';
-    $('p-expiry').textContent = '—';
-    $('p-device').textContent = deviceID().slice(0, 12);
+    set('p-status', 'inactive'); set('p-key', '—'); set('p-activation', '—');
+    set('p-expiry', '—'); set('p-device', deviceID().slice(0, 12));
     return;
   }
   const result = await checkKey(stored);
-  $('p-status').textContent = result.active ? `granted${result.legacy ? ' · legacy' : ''}` : result.reason;
-  $('p-key').textContent = stored.slice(0, 4) + '…' + stored.slice(-4);
-  $('p-activation').textContent = result.status || '—';
-  $('p-expiry').textContent = result.expiry
-    ? result.expiry.toISOString().slice(0, 10) : '—';
-  $('p-device').textContent = deviceID().slice(0, 12);
+  set('p-status', result.active ? `granted${result.legacy ? ' · legacy' : ''}` : result.reason);
+  set('p-key', stored.slice(0, 4) + '…' + stored.slice(-4));
+  set('p-activation', result.status || '—');
+  set('p-expiry', result.expiry ? result.expiry.toISOString().slice(0, 10) : '—');
+  set('p-device', deviceID().slice(0, 12));
 }
 
 function saveProfile() {
-  const name = $('profile-input').value.trim().slice(0, 24) || 'Invitado';
+  const input = $('profile-name-input');
+  const name = (input ? input.value : '').trim().slice(0, 24) || 'Invitado';
   localStorage.setItem(STORE.profile, JSON.stringify({ name }));
+  const note = $('profile-note');
+  if (note) note.textContent = 'Guardado';
   renderProfile();
 }
 
 // ---- static UI ------------------------------------------------------------
 
+const SIG_META = {
+  esign: ['02', 'ESign', 'Firma el IPA dentro de ESign. Si una no abre, prueba la siguiente.'],
+  ksign: ['03', 'KSign', 'Firma el IPA dentro de KSign. Si una no abre, prueba la siguiente.'],
+  scarlet: ['04', 'Scarlet', 'Firma el IPA dentro de Scarlet. Si una no abre, prueba la siguiente.'],
+  gbox: ['05', 'GBox', 'Firma el IPA dentro de GBox. Si una no abre, prueba la siguiente.']
+};
+
 function renderSign(group) {
-  $('sig-list').innerHTML = SIG_LINKS[group].map(([name, href]) =>
-    `<a class="sig-row" href="${href}"><span><strong>${name}</strong><small>IPA firmada</small></span><span class="go">Instalar →</span></a>`
+  const meta = SIG_META[group] || SIG_META.esign;
+  const rows = SIG_LINKS[group].map(([name, href]) =>
+    `<a class="sig-row" href="${href}"><span class="sig-row__meta"><span class="sig-row__name">${name}</span><span class="sig-row__org">IPA firmada · Dope</span></span><span class="sig-row__go">Instalar</span></a>`
   ).join('');
+  const host = $('sig-list');
+  if (host) host.innerHTML =
+    `<section class="sig-group"><header class="sig-group__head"><span class="sig-group__n">${meta[0]}</span><div><h3 class="sig-group__t">${meta[1]}</h3><p class="sig-group__d">${meta[2]}</p></div><span class="sig-group__count">${SIG_LINKS[group].length} apps</span></header><div class="sig-list">${rows}</div></section>`;
 }
 
 const FK_TEXT = {
@@ -243,10 +297,11 @@ function setLang(lang) {
 }
 
 function initWave() {
-  const canvas = $('wave');
+  const canvas = $('waveCanvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
   let t = 0;
-  function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+  function resize() { canvas.width = canvas.offsetWidth || innerWidth; canvas.height = canvas.offsetHeight || 260; }
   function draw() {
     resize();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -268,17 +323,46 @@ function initWave() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  $('stat-visits').textContent = inc('visits');
-  $('m-visits').textContent = $('stat-visits').textContent;
-  $('stat-downloads').textContent = localStorage.getItem(STORE.downloads) || 0;
-  $('m-downloads').textContent = $('stat-downloads').textContent;
+  const visits = inc('visits');
+  ['stat-visits', 'stat-visits-hero', 'stat-visits-big'].forEach(id => {
+    const el = $(id); if (el) el.textContent = visits;
+  });
+  const downloads = Number(localStorage.getItem(STORE.downloads) || 0);
+  ['stat-downloads', 'stat-downloads-hero', 'stat-downloads-big'].forEach(id => {
+    const el = $(id); if (el) el.textContent = downloads;
+  });
 
-  document.querySelectorAll('.nav-link').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+  document.querySelectorAll('.lp-nav-link').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
   document.querySelectorAll('.sig-tab').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('.sig-tab').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.sig-tab').forEach(x => {
+      const on = x === b;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
     renderSign(b.dataset.sig);
   }));
   document.querySelectorAll('.fk-lang button').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+
+  const nav = document.querySelector('.lp-head');
+  window.addEventListener('scroll', () => {
+    if (nav) nav.classList.toggle('is-stuck', window.scrollY > 20);
+  }, { passive: true });
+
+  const items = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  if (items.length && 'IntersectionObserver' in window &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-in');
+        io.unobserve(entry.target);
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -6% 0px' });
+    items.forEach(el => io.observe(el));
+  } else {
+    items.forEach(el => el.classList.add('is-in'));
+  }
+
   renderSign('esign');
   setLang('es');
   renderProfile();

@@ -1,7 +1,8 @@
-# Project X — distribution portal (local reconstruction)
+# Dope — distribution portal (local reconstruction)
 
-Static recreation of the `xkeyapi.onrender.com` distribution page. No backend is
-required: everything runs in the browser and persists in `localStorage`.
+Static recreation of the `xkeyapi.onrender.com` distribution page, rebranded to
+**Dope** with the original dark/monochrome `lp-*` design. No backend is required:
+everything runs in the browser and persists in `localStorage`.
 
 ## What is here
 
@@ -29,7 +30,9 @@ The app also accepts legacy keys (`XXXX-XXXX-…`) for existing users.
 
 The repo is public, so GitHub Pages is the fastest route:
 
-1. GitHub → repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+1. **One manual step first:** GitHub → repository **Settings → Pages → Build and
+   deployment → Source: GitHub Actions**. Until this is set once, the deploy job
+   fails with `Get Pages site failed ... Not Found` even with `enablement: true`.
 2. Push any change under `website/`. `.github/workflows/deploy-site.yml` uploads
    the folder and deploys it automatically.
 3. The site becomes `https://<username>.github.io/discord/`.

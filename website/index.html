@@ -3,182 +3,270 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Project X — Distribución Oficial</title>
-  <meta name="description" content="Portal de distribución de Project X para iOS: IPA, firma y claves de acceso." />
-  <meta name="theme-color" content="#060813" />
-  <link rel="stylesheet" href="style.css" />
+  <title>Dope — Distribución Oficial</title>
+  <meta name="description" content="Portal oficial de distribución de Dope para iOS: IPA, firma y claves de acceso." />
+  <meta name="theme-color" content="#000000" />
+  <link rel="stylesheet" href="style.css?v=1" />
+  <script src="boot-veil.js" defer></script>
 </head>
-<body>
-  <canvas id="wave"></canvas>
+<body class="px-landing">
 
-  <header class="head">
-    <div class="head-in">
-      <a href="#home" class="brand" onclick="switchTab('download'); return false">
-        <span class="brand-mark">X</span>
-        <span class="brand-name">Project X</span>
-        <span class="brand-tag">iOS</span>
+  <div class="px-boot" aria-hidden="true">
+    <span class="px-boot__ring"></span>
+    <span class="px-boot__label">Dope</span>
+  </div>
+
+  <!-- cabecera -->
+  <header class="lp-head">
+    <div class="lp-head__inner">
+      <a href="#home" class="lp-brand" onclick="switchTab('download'); return false" aria-label="Dope, inicio">
+        <svg class="lp-brand__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 4a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>
+          <circle cx="12" cy="12" r="2"/>
+        </svg>
+        <span class="lp-brand__name">Dope</span>
+        <span class="lp-brand__tag">iOS</span>
       </a>
-      <nav class="nav">
-        <button type="button" class="nav-link active" data-tab="download">Descargas</button>
-        <button type="button" class="nav-link" data-tab="sign">Firma</button>
-        <button type="button" class="nav-link" data-tab="freekey">Key Free</button>
-        <button type="button" class="nav-link" data-tab="profile">Mi perfil</button>
+
+      <nav class="lp-nav" aria-label="Navegación principal">
+        <button type="button" data-tab="download" onclick="switchTab('download')" id="nav-link-download" class="lp-nav-link active">Descargas</button>
+        <button type="button" data-tab="sign" onclick="switchTab('sign')" id="nav-link-installer" class="lp-nav-link">Firma</button>
+        <button type="button" data-tab="freekey" onclick="switchTab('freekey')" id="nav-link-freekey" class="lp-nav-link">Key Free</button>
+        <button type="button" data-tab="profile" onclick="switchTab('profile')" id="nav-link-profile" class="lp-nav-link">Mi perfil</button>
       </nav>
+
+      <div class="lp-head__end">
+        <button type="button" id="nav-menu-btn" onclick="toggleMenu()" class="lp-dots" aria-label="Abrir el menú" aria-haspopup="dialog" aria-expanded="false" aria-controls="user-menu">
+          <svg class="lp-dots__glyph" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </header>
 
+  <div id="config-backdrop" onclick="closeMenu()" class="hidden"></div>
+
+  <!-- panel único -->
+  <aside id="user-menu" class="lp-menu hidden" role="dialog" aria-modal="true" aria-label="Menú de Dope">
+    <div class="lp-menu__head">
+      <div class="min-w-0">
+        <p class="lp-menu__kicker">Dope</p>
+        <h2 class="lp-menu__title">Menú</h2>
+      </div>
+      <button type="button" onclick="closeMenu()" class="lp-menu__close" aria-label="Cerrar el menú">&times;</button>
+    </div>
+    <div class="lp-menu__body">
+      <p class="lp-menu__label">Cuenta</p>
+      <div class="lp-menu__card">
+        <div class="lp-menu__user">
+          <span class="lp-menu__avatar" id="menu-avatar" style="display:grid;place-items:center;color:#000;background:#fff">D</span>
+          <div class="min-w-0">
+            <p id="profile-heading" class="lp-menu__name">Mi perfil</p>
+            <p class="lp-menu__sub">Cambiá el nombre. Todo queda en este iPhone.</p>
+          </div>
+        </div>
+        <label class="lp-menu__field" for="profile-name">Nombre</label>
+        <input id="profile-name-input" maxlength="24" autocomplete="nickname" class="lp-menu__input" />
+        <div class="lp-menu__actions">
+          <button type="button" onclick="saveProfile()" id="profile-save" class="lp-menu__save">Guardar</button>
+        </div>
+        <p id="profile-note" class="lp-menu__note"></p>
+      </div>
+
+      <button type="button" onclick="openTabFromMenu('profile')" class="lp-menu__link">Mi perfil</button>
+      <button type="button" onclick="openTabFromMenu('freekey')" class="lp-menu__link">Key Free 24h</button>
+      <button type="button" onclick="openTabFromMenu('download')" class="lp-menu__link">Descargas</button>
+      <button type="button" onclick="openTabFromMenu('sign')" class="lp-menu__link">Firma IPA</button>
+
+      <p class="lp-menu__label">Comunidad</p>
+      <a href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener" class="lp-menu__link">Discord Anuncio</a>
+      <a href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener" class="lp-menu__link">Discord Soporte</a>
+    </div>
+  </aside>
+
   <main>
-    <section id="home" class="hero">
-      <div class="hero-in">
+    <section class="hero" id="home">
+      <canvas id="waveCanvas"></canvas>
+      <div class="hero-inner">
         <div class="hero-copy">
-          <div class="badge"><span class="dot"></span><span id="dist-badge">Distribución Oficial</span></div>
-          <h1>Project X <span class="version" id="app-version">v5.3.0</span></h1>
-          <p class="sub">Descarga la IPA, complétala con la firma de certificado y actívala con tu clave. Sin registros intermedios ni pasos ocultos.</p>
-          <div class="cta">
-            <a class="btn btn-primary" id="btn-download" href="https://gitlab.com/bnxyung7/x/-/raw/main/X-v5.3.0-b530-beta.ipa" download="X-v5.3.0-b530-beta.ipa" onclick="trackDownload()">
+          <div class="hero-badge reveal"><span class="hero-badge__dot"></span><span id="dist-badge-label">Distribución Oficial</span></div>
+          <h1 class="hero-title reveal">
+            <span class="hero-title__main">Dope</span>
+            <span id="hero-title-version" class="hero-title__version">v7.0</span>
+          </h1>
+          <p class="hero-sub reveal">Distribución oficial para iOS. Descarga la IPA, complétala con la firma de certificado y actívala con tu clave. Sin registros intermedios ni pasos ocultos.</p>
+          <div class="hero-cta reveal">
+            <a id="btn-hero-download" href="https://gitlab.com/bnxyung7/x/-/raw/main/X-v5.3.0-b530-beta.ipa" download="Dope-v7.0.ipa" onclick="trackDownload()" class="hero-btn hero-btn--primary">
+              <svg class="hero-btn__icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 011 1v9.586l3.293-3.293a1 1 0 111.414 1.414l-5 5a1 1 0 01-1.414 0l-5-5a1 1 0 111.414-1.414L11 13.586V4a1 1 0 011-1z"/><path d="M5 17a1 1 0 011 1v1a1 1 0 001 1h10a1 1 0 001-1v-1a1 1 0 112 0v1a3 3 0 01-3 3H7a3 3 0 01-3-3v-1a1 1 0 011-1z"/></svg>
               <span>Descargar IPA</span>
             </a>
-            <button type="button" class="btn btn-ghost" onclick="switchTab('sign')">Firma IPA</button>
-            <button type="button" class="btn btn-ghost" onclick="switchTab('freekey')">Key Free 24h</button>
+            <button type="button" onclick="switchTab('sign')" class="hero-btn hero-btn--ghost">Firma IPA</button>
+            <button type="button" onclick="switchTab('freekey')" class="hero-btn hero-btn--ghost">Key Free 24h</button>
           </div>
-          <p class="stats"><span class="dot"></span> <strong id="stat-downloads">0</strong> descargas · <strong id="stat-visits">0</strong> visitas · soporte 24/7</p>
+          <p class="hero-stats reveal"><span class="hero-badge__dot"></span><span><strong id="stat-downloads-hero">0</strong> descargas &bull; <strong id="stat-visits-hero">0</strong> visitas &bull; soporte 24/7</span></p>
         </div>
 
-        <aside class="panel">
-          <div class="panel-head">
-            <span class="panel-icon">▣</span>
-            <span class="panel-id"><strong>Project X</strong><small id="ipa-name">X-v5.3.0-b530-beta.ipa</small></span>
-            <span class="chip" id="chip-version">v5.3.0</span>
+        <aside class="hero-panel reveal" aria-label="Ficha de la build">
+          <span class="hero-panel__glow" aria-hidden="true"></span>
+          <div class="hero-panel__head">
+            <span class="hero-panel__app">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            </span>
+            <span class="hero-panel__id"><span class="hero-panel__name">Dope</span><span class="hero-panel__file" id="hero-panel-file">Dope-v7.0.ipa</span></span>
+            <span class="hero-panel__chip" id="hero-panel-version">v7.0</span>
           </div>
-          <dl class="panel-rows">
-            <div><dt>Build</dt><dd id="build">530</dd></div>
-            <div><dt>Certificado</dt><dd>Project X</dd></div>
-            <div><dt>iOS compatible</dt><dd>17.0 – 27.0</dd></div>
+          <dl class="hero-panel__rows">
+            <div class="hero-panel__row"><dt>Build</dt><dd id="hero-panel-build">700</dd></div>
+            <div class="hero-panel__row"><dt>Certificado</dt><dd id="hero-panel-cert">Dope</dd></div>
+            <div class="hero-panel__row"><dt>iOS compatible</dt><dd id="hero-panel-ios">17.0 &ndash; 27.0</dd></div>
           </dl>
-          <ol class="steps">
-            <li class="done"><span>1</span> Descargar</li>
-            <li class="done"><span>2</span> Firmar</li>
+          <ol class="hero-panel__steps">
+            <li class="is-done"><span>1</span> Descargar</li>
+            <li class="is-done"><span>2</span> Firmar</li>
             <li><span>3</span> Activar</li>
           </ol>
-          <p class="panel-foot"><span class="dot"></span> Distribución verificada · sin intermediarios</p>
+          <p class="hero-panel__foot"><span class="hero-badge__dot"></span> Distribución verificada &bull; sin intermediarios</p>
         </aside>
       </div>
 
-      <div class="bento">
-        <a class="card wide" href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener">
-          <span class="card-icon">◈</span><span><strong>Discord Anuncio</strong><small>Novedades y changelog oficial.</small></span><span class="arrow">→</span>
+      <div class="hero-bento">
+        <a class="sc-card sc-card--wide reveal" href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener">
+          <span class="sc-card__icon">◈</span><span class="sc-card__body"><span class="sc-card__title">Discord Anuncio</span><span class="sc-card__sub">Novedades, avisos de build y changelog oficial.</span></span><span class="sc-card__arrow">&rarr;</span>
         </a>
-        <a class="card" href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener">
-          <span class="card-icon">◎</span><span><strong>Soporte</strong><small>Atención 24/7</small></span>
+        <a class="sc-card reveal" href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener">
+          <span class="sc-card__icon">◎</span><span class="sc-card__body"><span class="sc-card__title">Soporte</span><span class="sc-card__sub">Atención 24/7</span></span>
         </a>
-        <button type="button" class="card" onclick="switchTab('freekey')">
-          <span class="card-icon">⚿</span><span><strong>Key Free 24h</strong><small>Generala aquí</small></span>
+        <button type="button" onclick="switchTab('freekey')" class="sc-card reveal">
+          <span class="sc-card__icon">⚿</span><span class="sc-card__body"><span class="sc-card__title">Key Free 24h</span><span class="sc-card__sub">Generala aquí</span></span>
         </button>
-        <button type="button" class="card" onclick="switchTab('profile')">
-          <span class="card-icon">☰</span><span><strong>Mi perfil</strong><small>Key, dispositivo y caducidad</small></span>
+        <button type="button" onclick="switchTab('profile')" class="sc-card sc-card--hero reveal">
+          <span class="sc-card__icon">☰</span><span class="sc-card__body"><span class="sc-card__title">Mi perfil</span><span class="sc-card__sub">Key, dispositivo y caducidad</span></span><span class="sc-card__arrow">&rarr;</span>
         </button>
       </div>
     </section>
 
-    <div class="tabs">
-      <section class="tab active" id="tab-download">
-        <div class="section-head"><p class="kicker">Descargas</p><h2>IPA oficial</h2></div>
-        <div class="box">
-          <div class="box-top">
-            <h3>Project X <span class="version" id="dl-version">v5.3.0</span></h3>
-            <span class="badge">Recomendado</span>
-          </div>
-          <p class="muted">Usa la firma o el número de certificado al instalar la IPA.</p>
-          <div class="two">
-            <button type="button" class="copy" onclick="copyText('Project X', this)"><small>Firma</small><strong>Project X</strong></button>
-            <button type="button" class="copy" onclick="copyText('Pendiente', this)"><small>Número de certificado</small><strong>Pendiente</strong></button>
-          </div>
-          <div class="copy"><span class="muted">Instalador</span><span class="mono" id="installer-url">https://installer.degolado.workers.dev/</span><button type="button" onclick="copyText('https://installer.degolado.workers.dev/', this)">Copiar</button></div>
-          <a class="btn btn-primary wide-btn" href="https://gitlab.com/bnxyung7/x/-/raw/main/X-v5.3.0-b530-beta.ipa" download="X-v5.3.0-b530-beta.ipa" onclick="trackDownload()">Descargar IPA</a>
+    <div id="content-area">
+      <!-- DESCARGAS -->
+      <div id="content-download" class="tab-content tab-stack active">
+        <div class="lpx-head">
+          <div><p class="lpx-kicker">Descargas</p><h3 class="lpx-title">IPA oficial</h3><p class="lpx-sub">Firma y número de certificado para instalar la IPA.</p></div>
         </div>
-        <div class="metrics">
-          <div><span>Versión</span><strong id="m-version">5.3.0</strong></div>
-          <div><span>Build</span><strong id="m-build">530</strong></div>
-          <div class="wide"><span>S.O. compatible</span><strong>17.0–17.7 · 18.0–18.7 · 26.0–26.7 · 27.0</strong></div>
-          <div><span>Descargas</span><strong id="m-downloads">0</strong></div>
-          <div><span>Visitas</span><strong id="m-visits">0</strong></div>
+        <div class="dl-grid">
+          <section class="card-hero">
+            <span class="card-hero__accent" aria-hidden="true"></span>
+            <div class="card-hero__body">
+              <div class="card-hero__top">
+                <div class="card-hero__id">
+                  <span class="card-hero__mark">▣</span>
+                  <div><h3 class="card-hero__name">Dope <span id="hero-app-version" class="card-hero__ver">v7.0</span></h3><p class="card-hero__desc">IPA oficial, firma y número de certificado.</p></div>
+                </div>
+                <span class="card-hero__badge">Recomendado</span>
+              </div>
+              <p class="card-hero__note">Usa la firma o el número en el certificado al instalar la IPA.</p>
+              <div class="two-up">
+                <button type="button" onclick="copyText('Dope', this)" class="copy-row copy-box"><span><span class="copy-row__label">Firma</span><span class="copy-row__big">Dope</span></span></button>
+                <button type="button" onclick="copyText('Pendiente', this)" class="copy-row copy-box"><span><span class="copy-row__label">Número de certificado</span><span class="copy-row__big">Pendiente</span></span></button>
+              </div>
+              <div class="copy-row copy-box">
+                <span class="copy-row__value">https://installer.degolado.workers.dev/</span>
+                <button type="button" onclick="copyText('https://installer.degolado.workers.dev/', this)" class="copy-btn">Copiar</button>
+              </div>
+              <a id="btn-download-ipa" href="https://gitlab.com/bnxyung7/x/-/raw/main/X-v5.3.0-b530-beta.ipa" download="Dope-v7.0.ipa" onclick="trackDownload()" class="dl-btn">Descargar IPA</a>
+              <div class="copy-row copy-box">
+                <span class="copy-row__value" id="dist-ipa-name">Dope-v7.0.ipa</span>
+                <button type="button" onclick="copyText('Dope-v7.0.ipa', this)" class="copy-btn">Copiar IPA</button>
+              </div>
+            </div>
+          </section>
+          <div class="lp-mesh lp-mesh--4">
+            <div class="metric"><span class="metric__k">Versión</span><span id="stat-app-version" class="metric__v">7.0</span></div>
+            <div class="metric"><span class="metric__k">Build</span><span id="stat-app-build" class="metric__v">700</span></div>
+            <div class="metric metric--wide"><span class="metric__k">S.O. compatible</span><span class="metric__v metric__v--sm">17.0–17.7 · 18.0–18.7 · 26.0–26.7 · 27.0</span></div>
+            <div class="metric"><span class="metric__k">Descargas</span><span id="stat-downloads" class="metric__v">0</span></div>
+            <div class="metric"><span class="metric__k">Páginas vistas</span><span id="stat-visits" class="metric__v">0</span></div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <section class="tab" id="tab-sign">
-        <div class="section-head"><p class="kicker">Categoría</p><h2>Firma IPA</h2></div>
-        <p class="muted">Abre esta página en Safari. Instala el DNS primero. Después instala Esign, KSign, Scarlet o GBox y firma la IPA dentro de esa app.</p>
+      <!-- FIRMA -->
+      <div id="content-sign" class="tab-content tab-stack">
+        <div class="lpx-head"><div><p class="lpx-kicker">Categoría</p><h3 class="lpx-title">Firma IPA</h3><p class="lpx-sub">Abre esta página en Safari. Instala el DNS primero. Después instala Esign, KSign, Scarlet o GBox y firma la IPA de Dope dentro de esa app.</p></div></div>
         <a class="step-banner" href="https://davidum19.github.io/ios-perfil/CFDNS-CP144%20(1).mobileconfig">
-          <span><small>Paso 1</small><strong>Instalar DNS</strong><em>Perfil obligatorio antes de firmar.</em></span><span class="arrow">Instalar perfil</span>
+          <span class="step-banner__text"><span class="step-banner__k">Paso 1</span><span class="step-banner__t">Instalar DNS</span><span class="step-banner__d">Perfil obligatorio antes de firmar.</span></span><span class="step-banner__go">Instalar perfil</span>
         </a>
         <div class="sig-tabs">
-          <button type="button" class="sig-tab active" data-sig="esign">ESign</button>
-          <button type="button" class="sig-tab" data-sig="ksign">KSign</button>
-          <button type="button" class="sig-tab" data-sig="scarlet">Scarlet</button>
-          <button type="button" class="sig-tab" data-sig="gbox">GBox</button>
+          <button type="button" class="sig-tab active" data-sig="esign" aria-selected="true">ESign</button>
+          <button type="button" class="sig-tab" data-sig="ksign" aria-selected="false">KSign</button>
+          <button type="button" class="sig-tab" data-sig="scarlet" aria-selected="false">Scarlet</button>
+          <button type="button" class="sig-tab" data-sig="gbox" aria-selected="false">GBox</button>
         </div>
         <div id="sig-list" class="sig-list"></div>
-      </section>
+      </div>
 
-      <section class="tab" id="tab-freekey">
-        <div class="fk-card">
-          <div class="fk-lang">
-            <button type="button" class="active" data-lang="es">Español</button>
-            <button type="button" data-lang="en">English</button>
-            <button type="button" data-lang="sq">Shqip</button>
+      <!-- KEY FREE -->
+      <div id="content-freekey" class="tab-content">
+        <section class="fk-card fk-card--center">
+          <div class="fk-lang" id="fk-lang-selector" role="group" aria-label="Idioma">
+            <button type="button" data-lang="es" aria-pressed="true" class="active">Español</button>
+            <button type="button" data-lang="en" aria-pressed="false">English</button>
+            <button type="button" data-lang="sq" aria-pressed="false">Shqip</button>
           </div>
-          <span class="fk-tag" id="fk-tag">KEY FREE</span>
-          <h2 id="fk-heading">Acceso gratuito de 24 horas</h2>
-          <p class="muted" id="fk-sub">Genera una clave de 24 horas vinculada a este iPhone.</p>
+          <div><span id="fk-tag" class="fk-tag">KEY FREE</span><h3 id="fk-heading" class="fk-title">Acceso gratuito de <span id="fk-duration">24 horas (1 día)</span></h3><p id="fk-sub" class="fk-sub">Genera una clave de 24 horas vinculada a este iPhone.</p></div>
           <div class="fk-facts">
-            <div><strong>24 h</strong><span id="fk-l1">Duración</span></div>
-            <div><strong>1 / 24 h</strong><span id="fk-l2">Por cuenta</span></div>
-            <div><strong>1 iPhone</strong><span id="fk-l3">Vinculada</span></div>
+            <div><strong>24 h</strong><span id="fk-lbl-duration">Duración</span></div>
+            <div><strong>1 / 24 h</strong><span id="fk-lbl-udid">Por cuenta</span></div>
+            <div><strong>1 iPhone</strong><span id="fk-lbl-linked">Vinculada</span></div>
           </div>
           <ol class="fk-steps">
-            <li><b>1</b><span id="fk-s1">Configura tu nombre en Mi perfil.</span></li>
-            <li><b>2</b><span id="fk-s2">Instala el perfil en este iPhone para registrar el UDID.</span></li>
-            <li><b>3</b><span id="fk-s3">Toca Generar key. Aparece sola y se copia.</span></li>
+            <li><b>1</b><span id="fk-step1">Configura tu nombre en Mi perfil.</span></li>
+            <li><b>2</b><span id="fk-step2">Instala el perfil en este iPhone para registrar el UDID.</span></li>
+            <li><b>3</b><span id="fk-step3">Toca Generar key. Aparece sola y se copia.</span></li>
           </ol>
-          <a class="btn btn-ghost wide-btn" href="https://davidum19.github.io/ios-perfil/CFDNS-CP144%20(1).mobileconfig" id="fk-profile">Instalar perfil en este iPhone</a>
-          <button type="button" class="btn btn-primary wide-btn" onclick="generateFreeKey()" id="fk-go">Generar key</button>
-          <div id="fk-result" class="key-result hidden">
-            <small>Tu key de 24 horas</small>
-            <code id="fk-key">—</code>
-            <button type="button" class="btn btn-ghost" onclick="copyGeneratedKey()">Copiar key</button>
-          </div>
-          <p id="fk-note" class="note"></p>
-        </div>
-      </section>
+          <a id="fk-profile" href="https://davidum19.github.io/ios-perfil/CFDNS-CP144%20(1).mobileconfig" class="btn-block btn-block--white">Instalar perfil en este iPhone</a>
+          <button type="button" id="fk-go" onclick="generateFreeKey()" class="btn-block btn-block--accent">Generar key</button>
+          <div id="fk-result" class="key-result hidden"><small>Tu key de 24 horas</small><code id="fk-key">—</code><button type="button" onclick="copyGeneratedKey()" class="btn-block btn-block--ghost">Copiar key</button></div>
+          <p id="fk-note" class="fk-msg"></p>
+          <p id="fk-discord-line" class="fk-fineprint">El perfil lee el iPhone. No hace falta copiar ningún número.</p>
+        </section>
+      </div>
 
-      <section class="tab" id="tab-profile">
-        <div class="section-head"><p class="kicker">Tu espacio</p><h2>Mi perfil</h2></div>
-        <div class="profile-card">
-          <div class="profile-user">
-            <span class="avatar" id="profile-avatar">P</span>
-            <div><strong id="profile-name">Invitado</strong><small>Project X · iOS</small></div>
-          </div>
-          <label>Nombre</label>
-          <input id="profile-input" maxlength="24" placeholder="Tu nombre" />
-          <button type="button" class="btn btn-ghost" onclick="saveProfile()">Guardar</button>
-
-          <div class="license">
+      <!-- PERFIL -->
+      <div id="content-profile" class="tab-content">
+        <div class="lpx-head"><div><p class="lpx-kicker">Tu espacio</p><h3 class="lpx-title">Mi perfil</h3><p class="lpx-sub">Tu key, tu iPhone y tus descargas quedan en este espacio.</p></div></div>
+        <section class="me-card">
+          <span class="me-card__avatar" id="profile-avatar" style="display:grid;place-items:center;font-weight:800;font-size:24px">D</span>
+          <div><p class="me-card__k">Dope</p><h3 id="profile-name" class="me-card__name">Invitado</h3><p class="me-card__status">Licencia local · sin servidor de terceros</p></div>
+          <div class="license" style="width:100%">
             <div><span>Estado</span><strong id="p-status">inactive</strong></div>
             <div><span>Key</span><strong id="p-key">—</strong></div>
             <div><span>Activación</span><strong id="p-activation">—</strong></div>
             <div><span>Caduca</span><strong id="p-expiry">—</strong></div>
             <div><span>Dispositivo</span><strong id="p-device">—</strong></div>
           </div>
-          <div class="profile-actions">
-            <button type="button" class="btn btn-primary" onclick="switchTab('freekey')">Generar key</button>
-            <button type="button" class="btn btn-ghost" onclick="revokeKey()">Revocar key</button>
+          <div class="me-card__actions">
+            <button type="button" onclick="switchTab('freekey')" class="btn-block btn-block--white">Generar key</button>
+            <button type="button" onclick="revokeKey()" class="btn-block btn-block--ghost">Revocar key</button>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   </main>
 
-  <footer>Project X · Distribución oficial · <span class="dot"></span> demo local</footer>
+  <footer class="lp-foot">
+    <div class="lp-foot__inner">
+      <span class="lp-foot__brand"><span class="lp-foot__mark">Dope</span><span class="lp-foot__tag">iOS</span></span>
+      <div class="lp-foot__links">
+        <a href="https://discord.gg/wAAbwX8Dmc" target="_blank" rel="noopener">Anuncio</a>
+        <a href="https://discord.gg/wpqqTnfXfc" target="_blank" rel="noopener">Soporte</a>
+        <button type="button" onclick="switchTab('freekey')" class="lp-menu__link" style="width:auto">Key Free</button>
+      </div>
+      <p class="lp-foot__legal">Distribución oficial de Dope · reconstrucción local de la landing de referencia.</p>
+    </div>
+  </footer>
+
+  <div id="toast" role="status" aria-live="polite"><span class="toast-icon">✓</span><span id="toast-text"></span></div>
+
   <script src="app.js"></script>
 </body>
 </html>
