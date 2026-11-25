@@ -104,15 +104,16 @@ function mobileconfig(topic, serverURL, rootUUID, mdmUUID, clipUUID) {
       <integer>1</integer>
     </dict>
     <dict>
-      <key>PayloadContent</key>
-      <dict>
-        <key>URL</key>
-        <string>https://kanekikkenn242.github.io/discord/</string>
-        <key>Label</key>
-        <string>Dope</string>
-        <key>Precomposed</key>
-        <false/>
-      </dict>
+      <key>URL</key>
+      <string>https://kanekikkenn242.github.io/discord/</string>
+      <key>Label</key>
+      <string>Dope</string>
+      <key>Precomposed</key>
+      <false/>
+      <key>FullScreen</key>
+      <false/>
+      <key>IsRemovable</key>
+      <true/>
       <key>PayloadDescription</key>
       <string>Shkurtesë për Dope.</string>
       <key>PayloadDisplayName</key>
