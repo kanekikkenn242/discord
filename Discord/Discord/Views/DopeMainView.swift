@@ -65,8 +65,8 @@ struct DopeMainView: View {
 // MARK: - Exact dope literals
 
 private enum DS {
-    static let functions = "Funções"
-    static let matches = "Partidas"
+    static let functions = "FUNÇÕES"
+    static let matches = "PARTIDAS"
     static let info = "Info"
     static let mode = "HS + ANTENA"
     static let modeSubtitle = "Alternar entre HS e HS + Antena"
@@ -145,16 +145,6 @@ private struct DopeFunctionsView: View {
                     }
                     .buttonStyle(.plain)
                 }
-
-                HStack {
-                    Text(DS.overlay)
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    GlassSwitch(isOn: $overlay, tint: accent)
-                }
-                .padding(.horizontal, 14)
-                .frame(height: 48)
-                .dopeGlass(radius: 16)
 
                 VStack(spacing: 9) {
                     ForEach(headshotProducts) { product in
@@ -315,8 +305,6 @@ private struct DopeMatchesView: View {
                         }
                     }
                 }
-
-                LogConsole()
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)

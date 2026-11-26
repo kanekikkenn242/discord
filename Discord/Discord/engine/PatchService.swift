@@ -813,6 +813,32 @@ enum PatchService {
         guard let url = FreeFireCatalog.packageURL(for: product) else {
             return .packageMissing
         }
+        // evergarden assembly rows all write to the SAME codepatch file. The
+        // generic "differs from backup" check would report every one of them
+        // as loaded at once. Compare the real bytes instead, so only the
+        // product whose payload is actually on disk is shown as active.
+        if product.id.hasPrefix("ever_"),
+           let package = try? PatchPackage.load(from: url),
+           let targets = try? resolvedRules(
+             package: package, bundleID: bundleID, fileSystem: fileSystem
+           ) {
+            var matching = 0
+            for target in targets {
+                guard let source = package.files[target.rule.source] else { continue }
+                if let current = try? fileSystem.read(target.relativePath),
+                   PatchPath.sha256Hex(current) == PatchPath.sha256Hex(source) {
+                    matching += 1
+                }
+            }
+            log(
+                "patch: \(product.id) — \(matching)/\(targets.count) payload file(s) match",
+                level: .info
+            )
+            if matching == targets.count { return .loaded }
+            if matching == 0 { return .notLoaded }
+            return .partial
+        }
+
         // A hot-update asset is not replaced with the packaged bytes: only the
         // changed floats are shifted into the build the device already has, so
         // a byte comparison against the package can never match after a

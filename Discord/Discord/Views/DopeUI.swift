@@ -15,24 +15,47 @@ extension Color {
 
 // MARK: - Glass primitives used by the dope 7.0 style
 
+/// Cut-corner card used by the evergarden injector rows.
+struct CutCornerShape: Shape {
+    var cut: CGFloat = 12
+
+    func path(in rect: CGRect) -> Path {
+        let c = min(cut, min(rect.width, rect.height) / 3)
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + c, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - c))
+        p.addLine(to: CGPoint(x: rect.maxX - c, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + c))
+        p.closeSubpath()
+        return p
+    }
+}
+
 private struct GlassSurface: ViewModifier {
     var radius: CGFloat = 18
     var opacity: Double = 0.14
     var stroke: Double = 0.22
 
     func body(content: Content) -> some View {
-        content
+        let shape = CutCornerShape(cut: radius * 0.8)
+        return content
             .background(
                 ZStack {
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(Color.white.opacity(opacity))
+                    shape.fill(.ultraThinMaterial)
+                    shape.fill(Color.white.opacity(opacity))
+                    shape.fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.05), Color.clear, Color.white.opacity(0.03)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                 }
             )
             .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(stroke), lineWidth: 0.8)
+                shape.stroke(Color.white.opacity(stroke), lineWidth: 0.7)
             )
             .shadow(color: Color.black.opacity(0.22), radius: 14, y: 6)
     }
