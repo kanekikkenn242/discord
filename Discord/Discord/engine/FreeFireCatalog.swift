@@ -33,6 +33,7 @@ enum PatchCategory: String, CaseIterable, Identifiable {
     case skin
     case texture
     case fps
+    case partidas
 
     var id: String { rawValue }
 
@@ -43,6 +44,7 @@ enum PatchCategory: String, CaseIterable, Identifiable {
         case .skin: return "game.category.skin"
         case .texture: return "game.category.texture"
         case .fps: return "game.category.fps"
+        case .partidas: return "game.category.partidas"
         }
     }
 
@@ -126,19 +128,19 @@ enum FreeFireCatalog {
                      category: .fps, tab: nil, slot: .fps,
                      packageNames: ["dope_fps"], badge: nil, noteKey: nil),
 
-        // evergarden / dope 8.0 — assembly payloads
-        PatchProduct(id: "ever_ass", titleKey: "dope.fn.auroraMenu", subtitleKey: "dope.sub.assembly8",
-                     category: .fps, tab: nil, slot: .fps,
-                     packageNames: ["ever_ass"], badge: "8.0", noteKey: nil),
+        // evergarden / dope 8.0 — PARTIDAS (stessa ordinamento della schermata)
         PatchProduct(id: "ever_assem3", titleKey: "dope.fn.fluoriteMenu", subtitleKey: "dope.sub.assembly8",
-                     category: .fps, tab: nil, slot: .fps,
-                     packageNames: ["ever_assem3"], badge: "8.0", noteKey: nil),
-        PatchProduct(id: "ever_asso", titleKey: "dope.fn.everExtra", subtitleKey: "dope.sub.assembly8",
-                     category: .fps, tab: nil, slot: .fps,
-                     packageNames: ["ever_asso"], badge: "8.0", noteKey: nil),
+                     category: .partidas, tab: nil, slot: .fps,
+                     packageNames: ["ever_assem3"], badge: nil, noteKey: nil),
+        PatchProduct(id: "ever_ass", titleKey: "dope.fn.auroraMenu", subtitleKey: "dope.sub.assembly8",
+                     category: .partidas, tab: nil, slot: .fps,
+                     packageNames: ["ever_ass"], badge: nil, noteKey: nil),
         PatchProduct(id: "ever_reset_guest", titleKey: "dope.fn.resetGuest", subtitleKey: "dope.sub.resetGuest",
-                     category: .fps, tab: nil, slot: .fps,
-                     packageNames: ["ever_reset_guest"], badge: "8.0", noteKey: nil),
+                     category: .partidas, tab: nil, slot: .fps,
+                     packageNames: ["ever_reset_guest"], badge: nil, noteKey: nil),
+        PatchProduct(id: "ever_asso", titleKey: "dope.fn.everExtra", subtitleKey: "dope.sub.assembly8",
+                     category: .partidas, tab: nil, slot: .fps,
+                     packageNames: ["ever_asso"], badge: nil, noteKey: nil),
 
         // TEXTURAS
         PatchProduct(id: "texture_sielzada", titleKey: "dope.tex.sielzada", subtitleKey: "dope.sub.santino",

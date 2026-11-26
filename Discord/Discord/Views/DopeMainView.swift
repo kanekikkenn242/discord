@@ -580,6 +580,7 @@ private struct DopeBannerPicker: View {
         ("dope1black.gif", "Dope 1 - Black"),
         ("dope2white.gif", "Dope 2 - White"),
         ("eyesbanner.gif", "Eyes Banner"),
+        ("evergarden2.gif", "Evergarden 8.0"),
         ("bkebe.gif", "Banner animado")
     ]
 
