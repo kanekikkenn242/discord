@@ -43,11 +43,15 @@ private struct GlassSurface: ViewModifier {
         return content
             .background(
                 ZStack {
-                    shape.fill(.ultraThinMaterial)
-                    shape.fill(Color.white.opacity(opacity))
+                    shape.fill(Color(hex: 0x24242B))
+                    shape.fill(Color.white.opacity(opacity * 0.5))
                     shape.fill(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.05), Color.clear, Color.white.opacity(0.03)],
+                            colors: [
+                                Color.white.opacity(0.07), Color.clear,
+                                Color.white.opacity(0.05), Color.clear,
+                                Color.white.opacity(0.03)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -199,11 +203,11 @@ struct GlassSwitch: View {
                     .fill(isOn ? tint.opacity(0.85) : Color.white.opacity(0.14))
                 Circle()
                     .fill(.white)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 20, height: 20)
                     .padding(3)
                     .shadow(radius: 2)
             }
-            .frame(width: 50, height: 30)
+            .frame(width: 46, height: 28)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isOn ? "On" : "Off")

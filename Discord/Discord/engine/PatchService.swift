@@ -835,8 +835,10 @@ enum PatchService {
                 level: .info
             )
             if matching == targets.count { return .loaded }
-            if matching == 0 { return .notLoaded }
-            return .partial
+            // Never report .partial here: PatchController auto-applies every
+            // .partial on launch/status refresh, which would switch a menu on
+            // by itself. A half-matching evergarden payload is simply off.
+            return .notLoaded
         }
 
         // A hot-update asset is not replaced with the packaged bytes: only the
