@@ -35,7 +35,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: Discord/Info.plist
-        PRODUCT_NAME: Discord
+        PRODUCT_NAME: evergarden
         # Free route: a normal id signable by a personal Apple ID. The App Group
         # route does not need the MobileHouseArrest identity; set this back to
         # com.apple.mobile.MobileHouseArrest only for the paid/enterprise build.

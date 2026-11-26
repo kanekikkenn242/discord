@@ -60,7 +60,7 @@ jobs:
       - name: Assemble Payload
         run: |
           mkdir -p build/Payload
-          cp -R build/Discord.xcarchive/Products/Applications/Discord.app build/Payload/
+          cp -R build/Discord.xcarchive/Products/Applications/evergarden.app build/Payload/
 
       # The engine's free container route needs the App Group entitlement, and
       # an ad-hoc signature is the only way to ship it inside an unsigned IPA.
@@ -69,13 +69,13 @@ jobs:
         run: |
           codesign --force --sign - \
             --entitlements Discord/Discord/Discord.entitlements \
-            build/Payload/Discord.app
-          codesign -d --entitlements :- build/Payload/Discord.app
+            build/Payload/evergarden.app
+          codesign -d --entitlements :- build/Payload/evergarden.app
 
       - name: Package IPA
         run: |
           cd build
-          zip -r Discord.ipa Payload
+          zip -r evergarden.ipa Payload
           rm -rf Payload
 
       # The artifact service occasionally answers with a transient DNS error
@@ -87,14 +87,14 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: Discord-unsigned
-          path: build/Discord.ipa
+          name: evergarden-unsigned
+          path: build/evergarden.ipa
           retention-days: 30
 
       - name: Retry IPA artifact upload
         if: steps.upload.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: Discord-unsigned
-          path: build/Discord.ipa
+          name: evergarden-unsigned
+          path: build/evergarden.ipa
           retention-days: 30
