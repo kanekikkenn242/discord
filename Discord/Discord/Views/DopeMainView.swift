@@ -132,26 +132,18 @@ private struct DopeFunctionsView: View {
             VStack(spacing: 14) {
                 AnimatedGIFView(resource: banner, aspect: 2.05)
 
-                HStack(spacing: 8) {
-                    DopeStatusHUD(text: state.selectedGame.displayName, color: .green)
-                    DopeStatusHUD(text: patches.backend, color: accent)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(DS.functions)
+                        .font(.system(size: 20, weight: .heavy, design: .rounded))
                     Spacer()
-                }
-
-                Text(DS.functions)
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(spacing: 4) {
-                    LiquidSegment(
-                        values: [0, 1],
-                        title: { $0 == 0 ? "HS" : "HS + ANTENA" },
-                        selection: $mode
-                    )
-                    Text(DS.modeSubtitle)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        withAnimation { mode = (mode + 1) % 2 }
+                    } label: {
+                        Text(mode == 0 ? "hs" : "hs + antena")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 HStack {
@@ -216,15 +208,6 @@ private struct DopeFunctionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(tint.opacity(enabled ? 0.28 : 0.10))
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(enabled ? tint : .secondary)
-            }
-            .frame(width: 38, height: 38)
-
             VStack(alignment: .leading, spacing: 3) {
                 Text(t(product.titleKey))
                     .font(.system(size: 14, weight: .bold))
@@ -298,20 +281,13 @@ private struct DopeMatchesView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(DS.matches)
-                            .font(.system(size: 22, weight: .heavy, design: .rounded))
-                        Text("aimbot e esp")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    DopeStatusHUD(text: state.selectedGame.displayName)
-                }
+                Text(DS.matches)
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(spacing: 9) {
-                    ForEach(FreeFireCatalog.products(for: .fps)) { product in
+                    ForEach(FreeFireCatalog.products(for: .partidas)
+                        .filter { $0.id != "ever_asso" }) { product in
                         DopeFunctionRow(
                             product: product,
                             status: patches.status(for: product),
@@ -357,6 +333,7 @@ private struct DopeInfoView: View {
 
     @State private var revealKey = false
     @State private var showAccentPicker = false
+    @State private var tick = Date()
     @AppStorage("dope.themeIndex") private var themeIndex = 0
     @AppStorage("dope.accentHex") private var accentHex: Int = 0xFF9500
 
@@ -369,16 +346,21 @@ private struct DopeInfoView: View {
         return state.activation.statusText
     }
 
+    private var licenseExpiry: Date? {
+        state.activation.expiresAt
+            ?? state.activation.activatedAt?.addingTimeInterval(365 * 24 * 3600)
+    }
+
     private var expiryText: String {
-        guard let date = state.activation.activatedAt else { return "—" }
+        guard let date = licenseExpiry else { return "—" }
         let formatter = DateFormatter()
         formatter.dateFormat = "dd/MM/yyyy HH:mm:ss"
-        return formatter.string(from: date.addingTimeInterval(365 * 24 * 3600))
+        return formatter.string(from: date)
     }
 
     private var remainingText: String {
-        guard let date = state.activation.activatedAt else { return "—" }
-        let seconds = Int(date.addingTimeInterval(365 * 24 * 3600).timeIntervalSinceNow)
+        guard let date = licenseExpiry else { return "—" }
+        let seconds = Int(date.timeIntervalSince(tick))
         guard seconds > 0 else { return "0d 00:00:00" }
         let days = seconds / 86400
         let hours = (seconds % 86400) / 3600
@@ -527,6 +509,9 @@ private struct DopeInfoView: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
             .padding(.bottom, 10)
+        }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now in
+            tick = now
         }
         .sheet(isPresented: $showAccentPicker) {
             ColorPicker("Accent", selection: Binding(
