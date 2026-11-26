@@ -711,6 +711,30 @@ enum PatchService {
         // restore instead of demanding a backup that can never exist.
         let created = Set(CreatedTargetsStore.load(productID: product.id, bundleID: bundleID))
 
+        // The bytes this package wrote, for the in-place targets. Free Fire
+        // can replace a hot-update file while the switch is still on (a game
+        // update, or its own re-download). Writing the old backup back then
+        // downgrades a file the game already refreshed — a stale codepatch is
+        // exactly the kind of mismatch that gets an account flagged. Only put
+        // the backup back while the file still holds the bytes we wrote.
+        var appliedBytes: [String: Data] = [:]
+        if let package = package,
+           let targets = try? resolvedRules(
+               package: package,
+               bundleID: bundleID,
+               fileSystem: fileSystem
+           ) {
+            for target in targets {
+                // Content-addressed avatar bundles are shifted into the
+                // device's own build, so the packaged bytes are not what was
+                // written. Every other target is written verbatim.
+                let verbatim = Self.writesInPlace(target.rule.source)
+                    || !target.relativePath.contains("/contentcache/")
+                guard verbatim, let data = package.files[target.rule.source] else { continue }
+                appliedBytes[target.relativePath] = data
+            }
+        }
+
         // Preflight: never restore half of a group.
         for path in paths where !created.contains(path) && !BackupStore.hasBackup(
             bundleID: bundleID,
@@ -758,8 +782,28 @@ enum PatchService {
                     bundleID: bundleID,
                     relativePath: backupKey(for: path)
                 )
+                let current = try? fileSystem.read(path)
+                if let current = current, current == original {
+                    // Already back on the shipped bytes (a previous restore,
+                    // or the game itself). Writing again is pointless.
+                    restored.append(path)
+                    continue
+                }
+                if let expected = appliedBytes[path],
+                   let current = current,
+                   current != expected {
+                    // The game owns this file now. Restoring the stale
+                    // backup would replace a newer build with old bytes, so
+                    // leave it alone and only clear our bookkeeping.
+                    log(
+                        "patch: \(path) no longer holds the bytes this app wrote — keeping the game's copy instead of restoring a stale backup",
+                        level: .warning
+                    )
+                    restored.append(path)
+                    continue
+                }
                 log("patch: restoring \(path) [\(fileSystem.backendName)]")
-                if (try? fileSystem.exists(path)) == true {
+                if current != nil {
                     try fileSystem.write(original, to: path)
                 } else {
                     try fileSystem.create(original, at: path)
