@@ -251,6 +251,42 @@ private struct DopeFunctionRow: View {
     }
 }
 
+/// Reset guest is an action, not a state: it must rewrite
+/// {"resetGuest":true} on every tap so a banned guest can be replaced.
+private struct DopeResetGuestRow: View {
+    let product: PatchProduct
+    let busy: Bool
+    let onReset: () -> Void
+
+    @Environment(\.t) private var t
+
+    var body: some View {
+        Button { onReset() } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(t(product.titleKey))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(t(product.subtitleKey))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                Spacer(minLength: 4)
+                if busy {
+                    ProgressView().scaleEffect(0.75)
+                } else {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.orange)
+                }
+            }
+            .padding(12)
+            .dopeGlass(radius: 16)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct DopeTextureRow: View {
     let name: String
     let product: PatchProduct?
@@ -310,12 +346,24 @@ private struct DopeMatchesView: View {
                 VStack(spacing: 9) {
                     ForEach(FreeFireCatalog.products(for: .partidas)
                         .filter { $0.id != "ever_asso" }) { product in
-                        DopeFunctionRow(
-                            product: product,
-                            status: patches.status(for: product),
-                            busy: patches.busyProductID == product.id
-                        ) { enabled in
-                            state.setPatch(product, enabled: enabled)
+                        if product.id == "ever_reset_guest" {
+                            DopeResetGuestRow(
+                                product: product,
+                                busy: patches.busyProductID == product.id
+                            ) {
+                                // Always write {"resetGuest":true} again, even
+                                // if it was applied before — a banned guest
+                                // account needs a fresh reset every time.
+                                state.setPatch(product, enabled: true)
+                            }
+                        } else {
+                            DopeFunctionRow(
+                                product: product,
+                                status: patches.status(for: product),
+                                busy: patches.busyProductID == product.id
+                            ) { enabled in
+                                state.setPatch(product, enabled: enabled)
+                            }
                         }
                     }
                 }
