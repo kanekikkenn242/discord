@@ -51,11 +51,11 @@ ENTRIES = [
       ("aim2_localConfig_json", "Documents/localConfig.json")]),
     # evergarden / dope 8.0 — novos pacotes de assembly
     ("ever_ass", "ever_ass", CODEPATCH8, "aurora menu",
-     [("aim_localConfig_json", "Documents/localConfig.json")]),
+     [("aim2_localConfig_json", "Documents/localConfig.json")]),
     ("ever_assem3", "ever_assem3", CODEPATCH8, "fluorite menu",
      [("aim2_localConfig_json", "Documents/localConfig.json")]),
     ("ever_asso", "ever_asso", CODEPATCH8, "ever modo extra",
-     [("aim_localConfig_json", "Documents/localConfig.json")]),
+     [("aim2_localConfig_json", "Documents/localConfig.json")]),
     ("ever_reset_guest", "ever_localConfig_json", "Documents/localConfig.json", "reset guest"),
     ("dope_fps", "fps_com_dts_freefireth_plist", "Library/Preferences/com.dts.freefireth.plist", "120/144 fps"),
     # Texturas
