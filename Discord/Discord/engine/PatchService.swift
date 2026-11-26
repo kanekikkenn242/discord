@@ -601,6 +601,7 @@ enum PatchService {
         source == "asset_neck.raw"
             || source.hasPrefix("proxy_")
             || source.hasPrefix("dope_")
+            || source.hasPrefix("ever_")
             || source.hasPrefix("texture_")
     }
 
