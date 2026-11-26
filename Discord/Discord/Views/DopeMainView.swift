@@ -478,15 +478,13 @@ private struct DopeInfoView: View {
                     .frame(height: 44)
                     Divider().background(Color.white.opacity(0.08))
                     Button {
-                        state.activation.deactivate()
-                        UserDefaults.standard.removeObject(forKey: "dope.saved.key")
-                        UserDefaults.standard.removeObject(forKey: "dope.selectedBanner")
-                        UserDefaults.standard.removeObject(forKey: "dope.themeIndex")
-                        UserDefaults.standard.removeObject(forKey: "discord.udid.token")
+                        if let product = FreeFireCatalog.product(id: "ever_reset_guest") {
+                            state.setPatch(product, enabled: true)
+                        }
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "arrow.counterclockwise").foregroundStyle(.orange).frame(width: 20)
-                            Text("Reset guest").font(.system(size: 12))
+                            Text(t("dope.fn.resetGuest")).font(.system(size: 12))
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(.secondary)
                         }

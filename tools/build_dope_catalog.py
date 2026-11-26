@@ -52,6 +52,7 @@ ENTRIES = [
      [("ever_localConfig_json", "Documents/localConfig.json")]),
     ("ever_asso", "ever_asso", "Documents/Assembly-CSharp-patch.bytes", "ever modo extra",
      [("ever_localConfig_json", "Documents/localConfig.json")]),
+    ("ever_reset_guest", "ever_localConfig_json", "Documents/localConfig.json", "reset guest"),
     ("dope_fps", "fps_com_dts_freefireth_plist", "Library/Preferences/com.dts.freefireth.plist", "120/144 fps"),
     # Texturas
     ("texture_sielzada", "sielzada", TEXTURE + "optionalab_avatar_62.o~2FELJ0~2BswGVk~2F~2BDPzjlpxie6x~2FA~3D", "textura sielzada"),

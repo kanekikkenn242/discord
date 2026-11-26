@@ -136,6 +136,9 @@ enum FreeFireCatalog {
         PatchProduct(id: "ever_asso", titleKey: "dope.fn.everExtra", subtitleKey: "dope.sub.assembly8",
                      category: .fps, tab: nil, slot: .fps,
                      packageNames: ["ever_asso"], badge: "8.0", noteKey: nil),
+        PatchProduct(id: "ever_reset_guest", titleKey: "dope.fn.resetGuest", subtitleKey: "dope.sub.resetGuest",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["ever_reset_guest"], badge: "8.0", noteKey: nil),
 
         // TEXTURAS
         PatchProduct(id: "texture_sielzada", titleKey: "dope.tex.sielzada", subtitleKey: "dope.sub.santino",
