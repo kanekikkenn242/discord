@@ -5,6 +5,7 @@ import Combine
 final class PatchController: ObservableObject {
     @Published private(set) var statuses: [String: PatchProductStatus] = [:]
     @Published private(set) var busyProductID: String?
+    @Published private(set) var busyAction: String?
     @Published private(set) var backend: String = "not available"
     @Published private(set) var lastError: String?
     @Published private(set) var exportNote: String?
@@ -146,6 +147,7 @@ final class PatchController: ObservableObject {
         retryTask?.cancel()
         retryTask = nil
         busyProductID = product.id
+        busyAction = enabled ? "apply" : "restore"
         lastError = nil
 
         let bundleID = game.rawValue
@@ -218,6 +220,7 @@ final class PatchController: ObservableObject {
 
                 await MainActor.run {
                     self.busyProductID = nil
+                    self.busyAction = nil
                     self.backend = backendName
                     self.statuses[productID] = enabled ? .loaded : .notLoaded
                     if enabled {
@@ -236,6 +239,7 @@ final class PatchController: ObservableObject {
                 log("ui: \(productID) failed — \(full)", level: .error)
                 await MainActor.run {
                     self.busyProductID = nil
+                    self.busyAction = nil
                     self.lastError = full
                     self.statuses[productID] = .unavailable(message)
                 }
@@ -298,6 +302,7 @@ final class PatchController: ObservableObject {
 
                 await MainActor.run {
                     self.busyProductID = nil
+                    self.busyAction = nil
                     self.exportNote = written.joined(separator: ", ")
                     log(
                         "ui: avatar asset exported — Files › Discord › export › \(self.exportNote ?? "")",
@@ -310,6 +315,7 @@ final class PatchController: ObservableObject {
                 log("ui: export failed — \(full)", level: .error)
                 await MainActor.run {
                     self.busyProductID = nil
+                    self.busyAction = nil
                     self.lastError = full
                     self.exportNote = message
                 }

@@ -86,7 +86,7 @@ struct SettingsView: View {
             AppTile(size: 44)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("dope")
+                Text("evergarden")
                     .font(.system(size: 16, weight: .bold))
                 Text("v\(state.version)")
                     .font(.system(size: 12, weight: .medium))

@@ -47,7 +47,10 @@ struct DopeMainView: View {
         }
         .overlay {
             if let busy = patches.busyProductID {
-                DopeProcessDialog(name: displayName(for: busy))
+                DopeProcessDialog(
+                    name: displayName(for: busy),
+                    removing: patches.busyAction == "restore"
+                )
             }
         }
         .onAppear {
@@ -112,7 +115,7 @@ private struct DopeFunctionsView: View {
 
     @State private var mode = 0
     @State private var overlay = true
-    @State private var toast: String?
+    @State private var result: (title: String, body: String, ok: Bool)?
     @AppStorage("dope.accentHex") private var accentHex: Int = 0xFF9500
 
     private var accent: Color { Color(hex: UInt32(accentHex)) }
@@ -155,7 +158,10 @@ private struct DopeFunctionsView: View {
                             tint: accent
                         ) { enabled in
                             state.setPatch(product, enabled: enabled)
-                            toast = enabled ? DS.injected : DS.removed
+                            let label = t(product.titleKey)
+                            result = enabled
+                                ? (DS.injected, "\(label) foi injetada.", true)
+                                : (DS.removed, "\(label) foi removida.", false)
                         }
                     }
                 }
@@ -168,18 +174,44 @@ private struct DopeFunctionsView: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
         }
-        .overlay(alignment: .top) {
-            if let toast {
-                Text(toast)
-                    .font(.system(size: 12, weight: .semibold))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .dopeGlass(radius: 16)
-                    .padding(.top, 8)
-                    .task {
-                        try? await Task.sleep(nanoseconds: 1_800_000_000)
-                        self.toast = nil
+        .overlay {
+            if let result {
+                ZStack {
+                    Color.black.opacity(0.72).ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        Image(systemName: result.ok ? "checkmark" : "xmark")
+                            .font(.system(size: 26, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .frame(width: 58, height: 58)
+                            .background(
+                                Circle().fill(result.ok ? Color.black : Color.red)
+                            )
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.12)))
+                        Text(result.title)
+                            .font(.system(size: 17, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text(result.body)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .multilineTextAlignment(.center)
+                        Divider().background(Color.white.opacity(0.12))
+                        Button {
+                            self.result = nil
+                        } label: {
+                            Text("OK")
+                                .font(.system(size: 15, weight: .heavy))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 44)
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(22)
+                    .frame(maxWidth: 320)
+                    .background(Color(hex: 0x24242B), in: RoundedRectangle(cornerRadius: 22))
+                    .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color.white.opacity(0.12)))
+                    .padding(.horizontal, 34)
+                }
             }
         }
     }
@@ -363,7 +395,7 @@ private struct DopeInfoView: View {
                 HStack(spacing: 13) {
                     DopeAvatar(accent: accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("dope")
+                        Text("evergarden")
                             .font(.system(size: 25, weight: .heavy, design: .rounded))
                         Text("config.avatar")
                             .font(.system(size: 10))
@@ -550,8 +582,8 @@ private struct DopeBannerPicker: View {
     @Environment(\.dismiss) private var dismiss
 
     private let options = [
-        ("dope1black.gif", "Dope 1 - Black"),
-        ("dope2white.gif", "Dope 2 - White"),
+        ("dope1black.gif", "Evergarden - Black"),
+        ("dope2white.gif", "Evergarden - White"),
         ("eyesbanner.gif", "Eyes Banner"),
         ("evergarden2.gif", "Evergarden 8.0"),
         ("bkebe.gif", "Banner animado")
@@ -606,7 +638,7 @@ private struct DopeLoginGate: View {
         ZStack {
             Color.black.opacity(0.72).ignoresSafeArea()
             VStack(spacing: 16) {
-                Text("dope")
+                Text("evergarden")
                     .font(.system(size: 30, weight: .heavy, design: .rounded))
                 Text(DS.loginTitle)
                     .font(.system(size: 13))
@@ -662,44 +694,61 @@ private struct DopeLoginGate: View {
 
 private struct DopeProcessDialog: View {
     let name: String
+    var removing: Bool = false
     @State private var step = 0
 
-    private let steps = [
-        "Verificando compatibilidade do dispositivo...",
-        "Preparando %@...",
-        "Baixando e validando o arquivo...",
-        "Gravando no destino selecionado...",
-        "Liberando recursos..."
-    ]
+    private var steps: [String] {
+        removing
+            ? ["Preparando a restauração de \(name)...",
+               "Localizando o backup original...",
+               "Restaurando o arquivo anterior...",
+               "Verificando o resultado da remoção..."]
+            : ["Preparando \(name)...",
+               "Verificando os componentes necessários..."]
+    }
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.68).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    ProgressView().tint(.orange)
-                    Text("Injetando \(name)")
-                        .font(.system(size: 15, weight: .bold))
+            Color.black.opacity(0.72).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.9)
+                    Text("\(removing ? "Removendo" : "Injetando") \(name)")
+                        .font(.system(size: 16, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
                 }
-                ForEach(0..<min(step + 1, steps.count), id: \.self) { index in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("\(index + 1).")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.orange)
-                        Text(String(format: steps[index], name))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                Text(removing
+                     ? "Não feche o app enquanto a remoção está em andamento."
+                     : "Não feche o app enquanto a injeção está em andamento.")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(0..<min(step + 1, steps.count), id: \.self) { index in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("\(index + 1).")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.45))
+                            Text(steps[index])
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.85))
+                        }
                     }
                 }
+                .padding(.top, 4)
             }
-            .padding(20)
+            .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .dopeGlass(radius: 20)
-            .padding(.horizontal, 28)
+            .background(Color(hex: 0x24242B), in: RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.8)
+            )
+            .padding(.horizontal, 34)
         }
         .onAppear {
-            guard step < steps.count else { return }
-            Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { timer in
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
                 DispatchQueue.main.async {
                     if step < steps.count - 1 { step += 1 }
                     else { timer.invalidate() }

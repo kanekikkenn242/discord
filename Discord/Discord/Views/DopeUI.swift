@@ -56,6 +56,14 @@ private struct GlassSurface: ViewModifier {
                             endPoint: .bottomTrailing
                         )
                     )
+                    // MTGlassView._glossLayer — specular highlight along the top edge
+                    shape.fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.10), Color.clear],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    )
                 }
             )
             .overlay(
@@ -201,8 +209,16 @@ struct GlassSwitch: View {
             ZStack(alignment: isOn ? .trailing : .leading) {
                 Capsule()
                     .fill(isOn ? tint.opacity(0.85) : Color.white.opacity(0.14))
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.7)
                 Circle()
-                    .fill(.white)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white, Color.white.opacity(0.78)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     .frame(width: 20, height: 20)
                     .padding(3)
                     .shadow(radius: 2)
