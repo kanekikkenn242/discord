@@ -126,6 +126,17 @@ enum FreeFireCatalog {
                      category: .fps, tab: nil, slot: .fps,
                      packageNames: ["dope_fps"], badge: nil, noteKey: nil),
 
+        // evergarden / dope 8.0 — assembly payloads
+        PatchProduct(id: "ever_ass", titleKey: "dope.fn.everPainel", subtitleKey: "dope.sub.assembly8",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["ever_ass"], badge: "8.0", noteKey: nil),
+        PatchProduct(id: "ever_assem3", titleKey: "dope.fn.everAimEsp", subtitleKey: "dope.sub.assembly8",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["ever_assem3"], badge: "8.0", noteKey: nil),
+        PatchProduct(id: "ever_asso", titleKey: "dope.fn.everExtra", subtitleKey: "dope.sub.assembly8",
+                     category: .fps, tab: nil, slot: .fps,
+                     packageNames: ["ever_asso"], badge: "8.0", noteKey: nil),
+
         // TEXTURAS
         PatchProduct(id: "texture_sielzada", titleKey: "dope.tex.sielzada", subtitleKey: "dope.sub.santino",
                      category: .texture, tab: nil, slot: .texture,

@@ -1,4 +1,4 @@
-name = "dope-udid"
+name = "dope-udid-zada-2026"
 main = "worker.js"
 compatibility_date = "2026-11-25"
 
@@ -6,4 +6,4 @@ compatibility_date = "2026-11-25"
 # Paste the returned id below.
 [[kv_namespaces]]
 binding = "DOPE"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "b44d0cde3fae4ef5842204a67397bccd"

@@ -94,7 +94,7 @@ private enum DS {
     static let loginHelp = "Precisa de uma key? Clique aqui"
     static let enter = "Entrar"
     static let cancel = "Cancelar"
-    static let themes = ["Preto", "Branco", "Vermelho", "Azul"]
+    static let themes = ["Preto", "Branco", "Vermelho", "Azul", "Aurora", "Fluorite"]
     static let functionNames = ["painel", "aimbot e esp", "120/144 fps", "assembly", "aimbot & esp"]
     static let textureNames = [
         "textura sielzada", "textura mordecai", "textura homem-aranha",
@@ -409,10 +409,12 @@ private struct DopeInfoView: View {
                 HStack(spacing: 10) {
                     Button {
                         themeIndex = (themeIndex + 1) % DS.themes.count
-                        accentHex = [0x000000, 0xFFFFFF, 0xFF3B30, 0x0A84FF][themeIndex]
+                        accentHex = [0x000000, 0xFFFFFF, 0xFF3B30, 0x0A84FF,
+                                     0x7CE7B5, 0x9B8CFF][themeIndex]
                     } label: {
                         VStack(spacing: 4) {
-                            Image(systemName: ["moon.fill", "sun.max.fill", "drop.fill", "drop.triangle.fill"][themeIndex])
+                            Image(systemName: ["moon.fill", "sun.max.fill", "drop.fill",
+                                               "drop.triangle.fill", "sparkles", "waveform.path.ecg"][themeIndex])
                                 .font(.system(size: 17))
                             Text(DS.themes[themeIndex])
                                 .font(.system(size: 10, weight: .semibold))
@@ -469,6 +471,22 @@ private struct DopeInfoView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "cart.fill").foregroundStyle(.orange).frame(width: 20)
                             Text(DS.store).font(.system(size: 12))
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(height: 44)
+                    Divider().background(Color.white.opacity(0.08))
+                    Button {
+                        state.activation.deactivate()
+                        UserDefaults.standard.removeObject(forKey: "dope.saved.key")
+                        UserDefaults.standard.removeObject(forKey: "dope.selectedBanner")
+                        UserDefaults.standard.removeObject(forKey: "dope.themeIndex")
+                        UserDefaults.standard.removeObject(forKey: "discord.udid.token")
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "arrow.counterclockwise").foregroundStyle(.orange).frame(width: 20)
+                            Text("Reset guest").font(.system(size: 12))
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(.secondary)
                         }
