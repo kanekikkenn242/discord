@@ -277,6 +277,34 @@ enum AppliedTargetsStore {
     }
 }
 
+/// The exact bytes each apply wrote, keyed by target path. Restore uses this
+/// to tell "our patch is still on disk" from "the game replaced the file with
+/// a newer build": writing the old backup over a refreshed game file is worse
+/// than leaving the game's copy alone.
+enum AppliedDigestsStore {
+    private static func key(productID: String, bundleID: String) -> String {
+        "discord.appliedDigests.\(bundleID).\(productID)"
+    }
+
+    static func save(_ digests: [String: String], productID: String, bundleID: String) {
+        if digests.isEmpty {
+            clear(productID: productID, bundleID: bundleID)
+        } else {
+            UserDefaults.standard.set(digests, forKey: key(productID: productID, bundleID: bundleID))
+        }
+    }
+
+    static func load(productID: String, bundleID: String) -> [String: String] {
+        UserDefaults.standard.dictionary(
+            forKey: key(productID: productID, bundleID: bundleID)
+        ) as? [String: String] ?? [:]
+    }
+
+    static func clear(productID: String, bundleID: String) {
+        UserDefaults.standard.removeObject(forKey: key(productID: productID, bundleID: bundleID))
+    }
+}
+
 /// Files the injector created because they were not on the device yet — e.g.
 /// the on-demand `optionalab_avatar_62/66` texture bundles. There is no shipped
 /// original to back up for those, so a restore deletes them instead.

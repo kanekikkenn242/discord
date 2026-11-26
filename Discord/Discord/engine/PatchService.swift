@@ -544,6 +544,15 @@ enum PatchService {
             return try apply(package: package, product: product, bundleID: bundleID, fileSystem: fileSystem)
         }
 
+        // Record the digest of every byte this apply wrote. A later restore
+        // only puts the backup back while the file still matches these bytes;
+        // if the game refreshed it in the meantime, the game's copy wins.
+        var appliedDigests: [String: String] = [:]
+        for item in written {
+            appliedDigests[item.path] = PatchPath.sha256Hex(item.expected)
+        }
+        AppliedDigestsStore.save(appliedDigests, productID: product.id, bundleID: bundleID)
+
         RenamedTargetsStore.save(
             attempted.filter(\.renamed).map {
                 RenamedTarget(original: $0.originalPath, applied: $0.appliedPath)
@@ -711,13 +720,20 @@ enum PatchService {
         // restore instead of demanding a backup that can never exist.
         let created = Set(CreatedTargetsStore.load(productID: product.id, bundleID: bundleID))
 
-        // The bytes this package wrote, for the in-place targets. Free Fire
-        // can replace a hot-update file while the switch is still on (a game
-        // update, or its own re-download). Writing the old backup back then
-        // downgrades a file the game already refreshed — a stale codepatch is
-        // exactly the kind of mismatch that gets an account flagged. Only put
-        // the backup back while the file still holds the bytes we wrote.
-        var appliedBytes: [String: Data] = [:]
+        // The bytes each apply wrote. Free Fire can replace a hot-update file
+        // while the switch is still on (a game update, or its own re-download).
+        // Writing the old backup back then downgrades a file the game already
+        // refreshed — a stale codepatch is exactly the kind of mismatch that
+        // gets an account flagged. Only put the backup back while the file
+        // still holds the bytes we wrote.
+        //
+        // Older builds did not record digests. For those, fall back to the
+        // packaged bytes for every target written verbatim; that still covers
+        // the codepatch menus, whose payload never changed.
+        var expectedDigests = AppliedDigestsStore.load(
+            productID: product.id,
+            bundleID: bundleID
+        )
         if let package = package,
            let targets = try? resolvedRules(
                package: package,
@@ -730,8 +746,10 @@ enum PatchService {
                 // written. Every other target is written verbatim.
                 let verbatim = Self.writesInPlace(target.rule.source)
                     || !target.relativePath.contains("/contentcache/")
-                guard verbatim, let data = package.files[target.rule.source] else { continue }
-                appliedBytes[target.relativePath] = data
+                guard verbatim,
+                      expectedDigests[target.relativePath] == nil,
+                      let data = package.files[target.rule.source] else { continue }
+                expectedDigests[target.relativePath] = PatchPath.sha256Hex(data)
             }
         }
 
@@ -789,18 +807,29 @@ enum PatchService {
                     restored.append(path)
                     continue
                 }
-                if let expected = appliedBytes[path],
-                   let current = current,
-                   current != expected {
-                    // The game owns this file now. Restoring the stale
-                    // backup would replace a newer build with old bytes, so
-                    // leave it alone and only clear our bookkeeping.
-                    log(
-                        "patch: \(path) no longer holds the bytes this app wrote — keeping the game's copy instead of restoring a stale backup",
-                        level: .warning
-                    )
-                    restored.append(path)
-                    continue
+                if let expected = expectedDigests[path] {
+                    if current == nil {
+                        // The game removed the patched file (a hot-update
+                        // cleanup). Let it download its own copy instead of
+                        // recreating an old build from our backup.
+                        log(
+                            "patch: \(path) is gone — leaving it for the game to re-download",
+                            level: .warning
+                        )
+                        restored.append(path)
+                        continue
+                    }
+                    if let current = current, PatchPath.sha256Hex(current) != expected {
+                        // The game owns this file now. Restoring the stale
+                        // backup would replace a newer build with old bytes,
+                        // so leave it alone and only clear our bookkeeping.
+                        log(
+                            "patch: \(path) no longer holds the bytes this app wrote — keeping the game's copy instead of restoring a stale backup",
+                            level: .warning
+                        )
+                        restored.append(path)
+                        continue
+                    }
                 }
                 log("patch: restoring \(path) [\(fileSystem.backendName)]")
                 if current != nil {
@@ -831,6 +860,7 @@ enum PatchService {
         }
 
         AppliedTargetsStore.clear(productID: product.id, bundleID: bundleID)
+        AppliedDigestsStore.clear(productID: product.id, bundleID: bundleID)
         CreatedTargetsStore.clear(productID: product.id, bundleID: bundleID)
         RenamedTargetsStore.clear(productID: product.id, bundleID: bundleID)
         ManifestRowsStore.clear(productID: product.id, bundleID: bundleID)
