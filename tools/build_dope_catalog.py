@@ -22,6 +22,10 @@ ASSET = "Data/Raw/ios/gameassetbundles/avatar/assetindexer.tdn~2F53YNFWXQZyPdFl8
 # Payload-2's `targetPathForRow:` writes the texture bundles under the Optional
 # contentcache, with their exact content-addressed names.
 TEXTURE = "Documents/contentcache/Optional/ios/optionalavatarres/gameassetbundles/"
+# evergarden 8.0 loads the patched assembly from inside the content cache, not
+# from Documents/Assembly-CSharp-patch.bytes (that was the 7.0 layout).
+CODEPATCH8 = ("Documents/contentcache/Compulsory/ios/gameassetbundles/codepatch/"
+              "assembly-csharp-patch.T0mFTHJhcvgBJrIRhg8bEapnUTM~3D")
 
 # (package name, payload file, destination, display name)
 # Row numbers are the ones in the dope 7.0 binary:
@@ -46,11 +50,11 @@ ENTRIES = [
      [("aim2_config_bin", "Documents/config.bin"),
       ("aim2_localConfig_json", "Documents/localConfig.json")]),
     # evergarden / dope 8.0 — novos pacotes de assembly
-    ("ever_ass", "ever_ass", "Documents/Assembly-CSharp-patch.bytes", "ever painel",
+    ("ever_ass", "ever_ass", CODEPATCH8, "aurora menu",
      [("aim_localConfig_json", "Documents/localConfig.json")]),
-    ("ever_assem3", "ever_assem3", "Documents/Assembly-CSharp-patch.bytes", "ever aimbot e esp",
+    ("ever_assem3", "ever_assem3", CODEPATCH8, "fluorite menu",
      [("aim2_localConfig_json", "Documents/localConfig.json")]),
-    ("ever_asso", "ever_asso", "Documents/Assembly-CSharp-patch.bytes", "ever modo extra",
+    ("ever_asso", "ever_asso", CODEPATCH8, "ever modo extra",
      [("aim_localConfig_json", "Documents/localConfig.json")]),
     ("ever_reset_guest", "ever_localConfig_json", "Documents/localConfig.json", "reset guest"),
     ("dope_fps", "fps_com_dts_freefireth_plist", "Library/Preferences/com.dts.freefireth.plist", "120/144 fps"),
