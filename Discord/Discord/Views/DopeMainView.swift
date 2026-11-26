@@ -484,7 +484,7 @@ private struct DopeInfoView: View {
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "arrow.counterclockwise").foregroundStyle(.orange).frame(width: 20)
-                            Text(t("dope.fn.resetGuest")).font(.system(size: 12))
+                            Text("Reset guest").font(.system(size: 12))
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(.secondary)
                         }
